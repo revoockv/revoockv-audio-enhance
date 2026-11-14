@@ -2,7 +2,7 @@ name: revoockv_audio_enhance
 description: >-
   Pure-Dart vocal enhancement: high-pass, spectral noise reduction, EQ, de-esser, compressor,
   ITU-R BS.1770 loudness and a true-peak limiter, plus WAV I/O. No native code.
-version: 0.1.0
+version: 0.2.0
 repository: https://github.com/revoockv/revoockv-audio-enhance
 issue_tracker: https://github.com/revoockv/revoockv-audio-enhance/issues
 topics: [audio, dsp, loudness, noise-reduction, vocals]

@@ -25,6 +25,9 @@ final class DynamicsProcessor {
   static const int _limiterBlock = 64;
   static const double _limiterLookaheadSeconds = 0.005;
   static const double _minTimeSeconds = 1e-6;
+  static const double _expanderFrameSeconds = 0.005;
+  static const double _expanderOpenSeconds = 0.005;
+  static const double _expanderCloseSeconds = 0.15;
 
   final BiquadFilters _filters;
   final LoudnessMeter _loudness;
@@ -93,6 +96,44 @@ final class DynamicsProcessor {
       releaseSeconds: releaseSeconds,
     );
     final Float64List gain = _perSample(_dbToGain(smoothed), frame, SampleOps.frames(samples));
+    return <Float64List>[
+      for (final Float64List channel in samples) SampleOps.generate(gain.length, (int i) => channel[i] * gain[i]),
+    ];
+  }
+
+  /// Downward expander: lowers what is more than [belowDb] under the loudness of [samples] by
+  /// [ratio]:1 (at most [floorDb]), so the room and the noise between phrases stay quiet. It
+  /// opens within 5 ms and closes over 150 ms, so note tails fade naturally.
+  Samples expand(
+    Samples samples,
+    int sampleRate, {
+    required double belowDb,
+    required double ratio,
+    required double floorDb,
+  }) {
+    if (ratio <= 1) return samples;
+    final double loudness = _loudness.integratedLufs(samples, sampleRate);
+    if (loudness.isInfinite) return samples;
+    final double threshold = loudness - belowDb;
+    final int frame = math.max(1, Numeric.roundHalfEven(_expanderFrameSeconds * sampleRate));
+    final Float64List levels = _frameLevelsDb(samples, frame);
+    final Float64List reduction = Float64List(levels.length);
+    for (int i = 0; i < levels.length; i++) {
+      final double gain = levels[i] < threshold ? math.max((levels[i] - threshold) * (ratio - 1), floorDb) : 0.0;
+      reduction[i] = -gain;
+    }
+    // A growing reduction (closing) is the "release" of the smoother, a shrinking one the "attack".
+    final Float64List smoothed = _smooth(
+      reduction,
+      frameSeconds: frame / sampleRate,
+      attackSeconds: _expanderOpenSeconds,
+      releaseSeconds: _expanderCloseSeconds,
+    );
+    final Float64List gain = _perSample(
+      SampleOps.generate(smoothed.length, (int i) => Numeric.dbToAmplitude(-smoothed[i])),
+      frame,
+      SampleOps.frames(samples),
+    );
     return <Float64List>[
       for (final Float64List channel in samples) SampleOps.generate(gain.length, (int i) => channel[i] * gain[i]),
     ];

@@ -7,6 +7,9 @@ import '../loudness/loudness_meter.dart';
 import '../loudness/recording_analysis.dart';
 import '../math/numeric.dart';
 import '../noise/noise_reducer.dart';
+import '../stereo/mono_widener.dart';
+import '../stereo/stereo_aligner.dart';
+import '../tone/tone_balancer.dart';
 import '../trim/silence_trimmer.dart';
 import '../task/audio_progress.dart';
 import '../task/audio_task.dart';
@@ -43,8 +46,8 @@ final class EnhanceResult {
   });
 }
 
-/// Runs the whole vocal chain: high-pass → noise reduction → EQ → de-esser → compressor →
-/// loudness → limiter → silence trim.
+/// Runs the whole vocal chain: stereo alignment → tone balance → high-pass → noise reduction →
+/// EQ → de-esser → compressor → expander → mono widening → loudness → limiter → silence trim.
 ///
 /// Three ways to call every operation:
 /// - [enhance] / [analyze] run right here, synchronously; pass `onProgress` to follow the steps;
@@ -52,7 +55,6 @@ final class EnhanceResult {
 /// - [enhanceTask] runs in the background and gives an [AudioTask]: a [Stream] of progress, the
 ///   result and `cancel()`.
 final class VocalEnhancer {
-  static const double _maxGainDb = 30.0;
   static const int _loudnessPasses = 4;
   static const double _loudnessToleranceLu = 0.2;
   static const double _maxExtraDb = 6.0;
@@ -62,6 +64,9 @@ final class VocalEnhancer {
   final DynamicsProcessor _dynamics;
   final NoiseReducer _noise;
   final SilenceTrimmer _trimmer;
+  final StereoAligner _aligner;
+  final ToneBalancer _tone;
+  final MonoWidener _widener;
 
   /// Creates a new [VocalEnhancer].
   factory VocalEnhancer() {
@@ -73,10 +78,22 @@ final class VocalEnhancer {
       DynamicsProcessor(filters: filters, loudness: loudness),
       const NoiseReducer(),
       const SilenceTrimmer(),
+      const StereoAligner(),
+      const ToneBalancer(),
+      const MonoWidener(),
     );
   }
 
-  VocalEnhancer._(this._filters, this._loudness, this._dynamics, this._noise, this._trimmer);
+  VocalEnhancer._(
+    this._filters,
+    this._loudness,
+    this._dynamics,
+    this._noise,
+    this._trimmer,
+    this._aligner,
+    this._tone,
+    this._widener,
+  );
 
   /// Measures [audio].
   RecordingAnalysis analyze(PcmAudio audio) => _loudness.measure(audio);
@@ -106,11 +123,18 @@ final class VocalEnhancer {
     final int rate = audio.sampleRate;
     final List<(String, Samples Function(Samples, void Function(double)))> chain =
         <(String, Samples Function(Samples, void Function(double)))>[
+          ('Aligning the channels', (Samples s, _) => settings.alignStereo ? _aligner.align(s, rate) : s),
+          ('Balancing the tone', (Samples s, _) => _balanceTone(s, rate, settings)),
           ('Removing rumble', (Samples s, _) => _highPass(s, rate, settings)),
           ('Reducing noise', (Samples s, void Function(double) part) => _reduceNoise(s, rate, settings, part)),
           ('Shaping the tone', (Samples s, _) => _equalize(s, rate, settings)),
           ('Taming sibilance', (Samples s, _) => _dynamics.deEss(s, rate, maxReductionDb: settings.deEssDb)),
           ('Evening out the dynamics', (Samples s, _) => _compress(s, rate, settings)),
+          ('Quieting the pauses', (Samples s, _) => _expand(s, rate, settings)),
+          (
+            'Widening the stereo',
+            (Samples s, _) => settings.widenMono ? _widener.widen(s, rate, widthDb: settings.monoWidthDb) : s,
+          ),
           ('Setting the loudness', (Samples s, _) => _normalize(s, rate, settings)),
           ('Limiting the peaks', (Samples s, _) => _limit(s, rate, settings)),
         ];
@@ -143,6 +167,25 @@ final class VocalEnhancer {
       keptTo: end,
     );
   }
+
+  Samples _balanceTone(Samples samples, int rate, EnhanceSettings settings) {
+    if (!settings.balancesTone) return samples;
+    return _tone.balance(
+      samples,
+      rate,
+      curve: settings.toneCurve,
+      maxBoostDb: settings.toneMaxBoostDb,
+      maxCutDb: settings.toneMaxCutDb,
+    );
+  }
+
+  Samples _expand(Samples samples, int rate, EnhanceSettings settings) => _dynamics.expand(
+    samples,
+    rate,
+    belowDb: settings.expanderBelowDb,
+    ratio: settings.expanderRatio,
+    floorDb: settings.expanderFloorDb,
+  );
 
   Samples _highPass(Samples samples, int rate, EnhanceSettings settings) {
     if (settings.highPassHz <= 0) return samples;
@@ -178,7 +221,7 @@ final class VocalEnhancer {
   Samples _normalize(Samples samples, int rate, EnhanceSettings settings) {
     final double loudness = _loudness.integratedLufs(samples, rate);
     if (loudness == double.negativeInfinity) return samples;
-    final double gainDb = math.min(settings.targetLufs - loudness, _maxGainDb);
+    final double gainDb = math.min(settings.targetLufs - loudness, settings.maxGainDb);
     return SampleOps.scaled(samples, Numeric.dbToAmplitude(gainDb));
   }
 

@@ -2,6 +2,7 @@ import 'dart:math' as math;
 import 'dart:typed_data';
 
 import '../audio/pcm_audio.dart';
+import '../fft/real_fft.dart';
 import '../math/numeric.dart';
 
 /// Window functions and FIR design, as in `scipy.signal`.
@@ -38,5 +39,33 @@ abstract final class Windows {
       h[n] /= sum;
     }
     return h;
+  }
+
+  /// `scipy.signal.get_window('hamming', size, fftbins=False)`: the symmetric Hamming window.
+  static Float64List hamming(int size) => size == 1
+      ? Float64List.fromList(<double>[1])
+      : SampleOps.generate(size, (int n) => 0.54 - 0.46 * math.cos(2 * math.pi * n / (size - 1)));
+
+  /// `scipy.signal.firwin2(taps, freqs, gains, fs=sampleRate)`: a linear-phase FIR (odd [taps])
+  /// whose amplitude response passes through [gains] (linear) at [freqs] (Hz, from 0 to the
+  /// Nyquist frequency, ascending), designed by frequency sampling with a Hamming window.
+  static Float64List firwin2(int taps, List<double> freqs, List<double> gains, double sampleRate) {
+    final double nyquist = sampleRate / 2;
+    if (freqs.first != 0 || freqs.last != nyquist) {
+      throw ArgumentError('freqs must start at 0 and end at the Nyquist frequency');
+    }
+    final int points = 1 + (1 << (math.log(taps) / math.ln2).ceil());
+    final int size = 2 * (points - 1);
+    final Float64x2List spectrum = Float64x2List(points);
+    final Float64List grid = Numeric.linspace(0, nyquist, points);
+    for (int k = 0; k < points; k++) {
+      final double gain = Numeric.interp(grid[k], freqs, gains);
+      // Delay by (taps - 1) / 2 samples, so the first taps of the inverse FFT are the filter.
+      final double phase = -(taps - 1) / 2 * math.pi * grid[k] / nyquist;
+      spectrum[k] = Float64x2(gain * math.cos(phase), gain * math.sin(phase));
+    }
+    final Float64List full = RealFft(size).inverse(spectrum);
+    final Float64List window = hamming(taps);
+    return SampleOps.generate(taps, (int n) => full[n] * window[n]);
   }
 }
