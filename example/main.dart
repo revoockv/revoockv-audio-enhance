@@ -13,7 +13,7 @@ Future<void> main(List<String> args) async {
   final EnhanceResult result = VocalEnhancer().enhance(
     take,
     settings: preset.settings,
-    onProgress: (EnhanceProgress p) => print('${(p.fraction * 100).round().toString().padLeft(3)} % ${p.label}'),
+    onProgress: (AudioProgress p) => print('${(p.fraction * 100).round().toString().padLeft(3)} % ${p.label}'),
   );
   await WavFile.write(args[1], result.audio);
   print('after:  ${result.after}');

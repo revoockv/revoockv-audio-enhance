@@ -47,6 +47,7 @@ final class NoiseReducer {
     required double reductionDb,
     required double sensitivity,
     required double profileSeconds,
+    void Function(double fraction)? onProgress,
   }) {
     if (reductionDb <= 0) return samples;
     final int size = sampleRate >= _highRate ? _fftSizeHighRate : _fftSizeLowRate;
@@ -54,9 +55,10 @@ final class NoiseReducer {
     final RealFft fft = RealFft(size);
     final Float64List window = Windows.hannPeriodic(size);
     return <Float64List>[
-      for (final Float64List channel in samples)
+      for (int c = 0; c < samples.length; c++)
         _reduceChannel(
-          channel,
+          samples[c],
+          onProgress: onProgress == null ? null : (double part) => onProgress((c + part) / samples.length),
           fft: fft,
           window: window,
           reductionDb: reductionDb,
@@ -68,6 +70,7 @@ final class NoiseReducer {
 
   Float64List _reduceChannel(
     Float64List channel, {
+    required void Function(double fraction)? onProgress,
     required RealFft fft,
     required Float64List window,
     required double reductionDb,
@@ -111,6 +114,7 @@ final class NoiseReducer {
     }
     const int context = _smoothFrames;
     for (int first = 0; first < count; first += _batchFrames) {
+      onProgress?.call(first / count);
       final int last = math.min(count, first + _batchFrames);
       final int low = math.max(0, first - context);
       final int high = math.min(count, last + context);
