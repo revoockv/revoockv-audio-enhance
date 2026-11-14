@@ -11,6 +11,7 @@ float32 too, so Python and Dart process exactly the same numbers.
 import json
 import logging
 import math
+import sys
 from dataclasses import asdict, replace
 from pathlib import Path
 
@@ -33,6 +34,25 @@ from vocal_enhance.features.enhance.domain.entities.enhance_preset import Enhanc
 from vocal_enhance.features.enhance.domain.entities.enhance_settings import EnhanceSettings
 
 OUT = Path(__file__).resolve().parent.parent / "test" / "fixtures"
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import reference_extras as extras  # noqa: E402
+
+# The 0.2.0 presets: the 0.1.0 chain without the fixed EQ, a peak-only compressor, plus the new
+# steps (alignment, auto-EQ, expander). "extras" holds the values of the new steps.
+V2 = {
+    "natural": (
+        dict(mud_cut_db=0.0, presence_db=0.0, air_db=0.0, compression_threshold_db=3.0,
+             compression_ratio=2.0, target_lufs=-15.0),
+        dict(align=1.0, auto_eq=1.0, max_boost=12.0, max_cut=12.0, below=20.0, ratio=2.0, floor=-12.0),
+    ),
+    "studio": (
+        dict(mud_cut_db=0.0, presence_db=0.0, air_db=0.0, compression_threshold_db=0.0,
+             compression_ratio=3.0, target_lufs=-14.0, noise_reduction_db=22.0, de_ess_db=8.0,
+             trim_silence=1.0, trim_padding_s=0.05),
+        dict(align=1.0, auto_eq=1.0, max_boost=12.0, max_cut=12.0, below=20.0, ratio=2.0, floor=-12.0),
+    ),
+}
 
 
 def voice(rate: int, seconds: float, channels: int, seed: int) -> np.ndarray:
@@ -95,6 +115,21 @@ def main() -> None:
             samples = trim.cut(samples, rate, start=start, end=end)
         return samples, [start, end]
 
+    def run_chain_v2(x, rate, settings, ex):
+        """The 0.2.0 chain: align, auto-EQ, the 0.1.0 steps, the expander after the compressor."""
+        samples = extras.align_stereo(x, rate) if ex["align"] > 0 else x
+        if ex["auto_eq"] > 0:
+            samples = extras.auto_eq(samples, rate, ex["max_boost"], ex["max_cut"])
+        for step in repository._chain:
+            samples = step.run(samples, rate, settings)
+            if step.label == "Evening out the dynamics":
+                samples = extras.expand(samples, rate, dynamics, loudness, ex["below"], ex["ratio"], ex["floor"])
+        start, end = 0, samples.shape[1]
+        if settings.trim_silence > 0:
+            start, end = trim.kept_range(samples, rate, padding_s=settings.trim_padding_s)
+            samples = trim.cut(samples, rate, start=start, end=end)
+        return samples, [start, end]
+
     cases = {
         "mono48": (48000, 1.2, 1, 1),
         "stereo44": (44100, 1.0, 2, 2),
@@ -142,6 +177,22 @@ def main() -> None:
             result, kept = run_chain(x, rate, settings)
             save(folder, f"chain_{preset.value}", result)
             chains[preset.value] = {"settings": asdict(settings), "kept": kept}
+        # 0.2.0 steps
+        if channels == 2:
+            delayed = x.copy()
+            delayed[1] = np.concatenate([np.zeros(13), x[0, :-13]]) * 0.7 + x[1] * 0.2
+            delayed = delayed.astype(np.float32).astype(np.float64)
+            save(folder, "input_delayed", delayed)
+            save(folder, "align", extras.align_stereo(delayed, rate))
+        save(folder, "auto_eq", extras.auto_eq(x, rate))
+        save(folder, "expand", extras.expand(x, rate, dynamics, loudness))
+        centres, correction = extras.tone_correction(x, rate, 12.0, 12.0)
+        v2 = {}
+        for preset_name, (changes, ex) in V2.items():
+            settings = replace(EnhancePreset.NATURAL.settings(), **changes)
+            result, kept = run_chain_v2(x, rate, settings, ex)
+            save(folder, f"chain_v2_{preset_name}", result)
+            v2[preset_name] = {"settings": asdict(settings), "extras": ex, "kept": kept}
         analysis = loudness.measure(PcmAudio(samples=x, sample_rate=rate))
         index[name] = {
             "sample_rate": rate,
@@ -153,6 +204,8 @@ def main() -> None:
             "measure": {k: number(v) for k, v in asdict(analysis).items()},
             "kept_range": [start, end],
             "chains": chains,
+            "chains_v2": v2,
+            "tone_correction": correction.tolist(),
         }
     (OUT / "fixtures.json").write_text(json.dumps(index, indent=2) + "\n")
 

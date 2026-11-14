@@ -74,6 +74,19 @@ abstract final class Numeric {
     return out;
   }
 
+  /// `numpy.interp(x, xp, fp)` for ascending [xp]: linear, held at the ends.
+  static double interp(double x, List<double> xp, List<double> fp) {
+    final int last = xp.length - 1;
+    if (x <= xp[0]) return fp[0];
+    if (x >= xp[last]) return fp[last];
+    int j = 0;
+    while (xp[j + 1] <= x) {
+      j++;
+    }
+    final double slope = (fp[j + 1] - fp[j]) / (xp[j + 1] - xp[j]);
+    return slope * (x - xp[j]) + fp[j];
+  }
+
   /// `numpy.linspace(start, stop, count)`.
   static Float64List linspace(double start, double stop, int count) {
     final Float64List out = Float64List(count);
