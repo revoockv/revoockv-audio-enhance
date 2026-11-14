@@ -3,8 +3,8 @@ import '../tone/tone_balancer.dart';
 /// Parameters of every step of the vocal chain; a step whose amount is 0 is skipped.
 ///
 /// The chain runs in this order: stereo alignment → tone balance (auto-EQ) → high-pass → noise
-/// reduction → EQ → de-esser → compressor → expander → loudness → limiter → (optional) silence
-/// trim. Levels are in dB, frequencies in Hz, times in seconds.
+/// reduction → EQ → de-esser → compressor → expander → mono widening → loudness → limiter →
+/// (optional) silence trim. Levels are in dB, frequencies in Hz, times in seconds.
 ///
 /// The defaults are the [EnhancePreset.natural] preset.
 final class EnhanceSettings {
@@ -75,6 +75,12 @@ final class EnhanceSettings {
   /// Most the expander lowers anything, in dB (negative).
   final double expanderFloorDb;
 
+  /// Turn a mono take into mono-compatible stereo (early reflections on the sides).
+  final bool widenMono;
+
+  /// Level of the sides under the voice when widening, in dB.
+  final double monoWidthDb;
+
   /// Integrated loudness of the result (-14 LUFS is the usual streaming level).
   final double targetLufs;
 
@@ -118,6 +124,8 @@ final class EnhanceSettings {
     this.expanderRatio = 2.0,
     this.expanderBelowDb = 20.0,
     this.expanderFloorDb = -12.0,
+    this.widenMono = true,
+    this.monoWidthDb = -12.0,
     this.targetLufs = -15.0,
     this.maxGainDb = 40.0,
     this.truePeakDb = -1.0,
@@ -153,6 +161,8 @@ final class EnhanceSettings {
     double? expanderRatio,
     double? expanderBelowDb,
     double? expanderFloorDb,
+    bool? widenMono,
+    double? monoWidthDb,
     double? targetLufs,
     double? maxGainDb,
     double? truePeakDb,
@@ -182,6 +192,8 @@ final class EnhanceSettings {
     expanderRatio: expanderRatio ?? this.expanderRatio,
     expanderBelowDb: expanderBelowDb ?? this.expanderBelowDb,
     expanderFloorDb: expanderFloorDb ?? this.expanderFloorDb,
+    widenMono: widenMono ?? this.widenMono,
+    monoWidthDb: monoWidthDb ?? this.monoWidthDb,
     targetLufs: targetLufs ?? this.targetLufs,
     maxGainDb: maxGainDb ?? this.maxGainDb,
     truePeakDb: truePeakDb ?? this.truePeakDb,
@@ -220,6 +232,7 @@ enum EnhancePreset {
       deEssDb: 0.0,
       compressionRatio: 1.0,
       expanderRatio: 1.0,
+      widenMono: false,
       targetLufs: -14.0,
     ),
   ),
@@ -236,6 +249,7 @@ enum EnhancePreset {
       compressionRatio: 3.0,
       compressionThresholdDb: -2.0,
       expanderRatio: 1.0,
+      widenMono: false,
       targetLufs: -14.0,
       maxGainDb: 30.0,
     ),
