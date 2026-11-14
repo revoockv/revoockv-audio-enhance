@@ -8,7 +8,8 @@ the projects below, to give the same results. Their copyright notices are kept h
 
 <https://github.com/scipy/scipy> — Copyright (c) 2001-2002 Enthought, Inc. 2003, SciPy Developers.
 Followed: `scipy.signal` (butter, buttap, lp2hp_zpk, lp2bp_zpk, bilinear_zpk, zpk2sos, sosfilt,
-sosfiltfilt, sosfilt_zi, lfilter_zi, resample_poly, firwin, windows.kaiser, get_window),
+sosfiltfilt, sosfilt_zi, lfilter_zi, resample_poly, firwin, firwin2, fftconvolve, welch,
+windows.kaiser, get_window),
 `scipy.ndimage.uniform_filter`, `scipy.io.wavfile`.
 
 ## NumPy — BSD-3-Clause

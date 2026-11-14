@@ -22,8 +22,10 @@ any tool on its own.
 lesson, an interview — and want it to sound better before you play, share or export it:
 
 - the hum, rumble and steady room noise (fan, fridge, hiss) are lowered;
-- the voice gets clearer: less boom, more presence and air, softer "s" sounds;
-- quiet and loud phrases come closer together;
+- the tone is balanced automatically: a dull, boxy take gets its presence and air back;
+- the hollow sound of the two spaced microphones of a phone is removed (stereo alignment);
+- the peaks are evened out while the pauses stay quiet, so the room does not come up with the
+  voice; softer "s" sounds;
 - the file ends up at a standard loudness (−14 LUFS by default, like streaming services) and
   never clips;
 - the silence before and after the voice can be cut away.
@@ -243,14 +245,17 @@ Any decoder that gives float samples in −1…1 works too: build
 
 | Step | Tool | What it does |
 |---|---|---|
-| 1 | `BiquadFilters.highPass` | 2nd-order Butterworth high-pass: removes rumble and handling noise |
-| 2 | `NoiseReducer` | spectral gate with a learned noise profile (STFT, Hann, 75 % overlap) |
-| 3 | `BiquadFilters.equalize` | peaking "mud" cut, "presence" boost, "air" high shelf |
-| 4 | `DynamicsProcessor.deEss` | lowers the 5–9 kHz band while it dominates ("s", "sh") |
-| 5 | `DynamicsProcessor.compress` | soft-knee compressor, threshold relative to the loudness |
-| 6 | `LoudnessMeter` + gain | normalises to a target integrated loudness (ITU-R BS.1770, LUFS) |
-| 7 | `DynamicsProcessor.limit` | look-ahead true-peak limiter (4× oversampled peaks) |
-| 8 | `SilenceTrimmer` | optional: cuts the silence before and after the voice |
+| 1 | `StereoAligner` | lines up the channels of two spaced microphones (±1 ms) and matches their levels |
+| 2 | `ToneBalancer` | auto-EQ: pulls the long-term spectrum towards a `ToneCurve` (linear-phase FIR, ±12 dB) |
+| 3 | `BiquadFilters.highPass` | 2nd-order Butterworth high-pass: removes rumble and handling noise |
+| 4 | `NoiseReducer` | spectral gate with a learned noise profile (STFT, Hann, 75 % overlap) |
+| 5 | `BiquadFilters.equalize` | optional fixed EQ: "mud" cut, "presence" boost, "air" shelf (off by default) |
+| 6 | `DynamicsProcessor.deEss` | lowers the 5–9 kHz band while it dominates ("s", "sh") |
+| 7 | `DynamicsProcessor.compress` | soft-knee compressor; by default it touches only the peaks |
+| 8 | `DynamicsProcessor.expand` | downward expander: keeps the pauses and the room quiet |
+| 9 | `LoudnessMeter` + gain | normalises to a target integrated loudness (ITU-R BS.1770, LUFS) |
+| 10 | `DynamicsProcessor.limit` | look-ahead true-peak limiter (4× oversampled peaks) |
+| 11 | `SilenceTrimmer` | optional: cuts the silence before and after the voice |
 
 ## Settings
 
@@ -258,27 +263,32 @@ Any decoder that gives float samples in −1…1 works too: build
 
 | Setting | Default | Meaning |
 |---|---|---|
+| `alignStereo` | true | line up the channels of a stereo take |
+| `toneMaxBoostDb` / `toneMaxCutDb` | 12 / 12 | limits of the tone balance (both 0 = off) |
+| `toneCurve` | `ToneCurve.balanced` | the spectrum the tone balance aims at |
 | `highPassHz` | 80 | corner of the rumble filter (0 = off); 100–120 for speech |
 | `noiseReductionDb` | 16 | how much steady noise is lowered (0 = off) |
 | `noiseSensitivity` | 1.5 | higher = more counts as noise (cleaner, but may thin the voice) |
 | `noiseProfileSeconds` | 0 | leading room tone used as the noise profile (0 = search automatically) |
-| `mudCutDb` / `mudHz` | −2 / 250 | removes boominess |
-| `presenceDb` / `presenceHz` | 1.5 / 3500 | makes words clearer |
-| `airDb` / `airHz` | 2 / 10000 | high shelf for air and sparkle |
+| `mudCutDb` / `presenceDb` / `airDb` | 0 / 0 / 0 | fixed EQ at `mudHz` 250, `presenceHz` 3500, `airHz` 10000 |
 | `deEssDb` | 6 | most the "s" band may be lowered (0 = off) |
-| `compressionRatio` | 3 | 1 = off |
-| `compressionThresholdDb` | −2 | relative to the loudness of the recording |
+| `compressionRatio` | 2 | 1 = off |
+| `compressionThresholdDb` | +3 | relative to the loudness; above 0 only the peaks are compressed |
 | `compressionAttackSeconds` / `ReleaseSeconds` | 0.01 / 0.15 | compressor speed |
-| `targetLufs` | −14 | final loudness; −16 for podcasts, −23 for broadcast (EBU R128) |
+| `expanderRatio` | 2 | 1 = off |
+| `expanderBelowDb` / `expanderFloorDb` | 20 / −12 | works under loudness − 20 dB, lowers by at most 12 dB |
+| `targetLufs` | −15 | final loudness; −14 for streaming, −16 for podcasts, −23 for broadcast |
+| `maxGainDb` | 40 | most the loudness step raises a quiet take |
 | `truePeakDb` | −1 | limiter ceiling in dBTP |
 | `limiterReleaseSeconds` | 0.08 | limiter recovery |
 | `trimSilence` / `trimPaddingSeconds` | false / 0.3 | cut silence, keeping this much around the voice |
 
 ## Presets
 
-- `EnhancePreset.natural` — gentle cleanup, keeps the room and the dynamics (the defaults);
-- `EnhancePreset.studio` — stronger noise reduction, more presence, tighter compression;
-- `EnhancePreset.loudnessOnly` — only loudness and limiting.
+- `EnhancePreset.natural` — the defaults: balanced tone, peak-only compression, quiet pauses;
+- `EnhancePreset.studio` — stronger noise reduction and de-essing, more compression, louder;
+- `EnhancePreset.loudnessOnly` — only loudness and limiting;
+- `EnhancePreset.classic` — the 0.1 chain: fixed EQ and a compressor that lifts the quiet parts.
 
 Change any value on top of a preset with `copyWith`.
 
@@ -295,7 +305,9 @@ Change any value on top of a preset with `copyWith`.
 The port is checked number for number against the reference Python implementation (NumPy /
 SciPy): every tool and the whole chain, mono 48 kHz and stereo 44.1 kHz, match to about 1e-6 of
 full scale (the precision of the stored float32 references), and a real recording comes out
-bit-identical in 24-bit. `tool/make_fixtures.py` regenerates the references.
+bit-identical in 24-bit. The steps added in 0.2 (alignment, tone balance, expander) are checked
+the same way against the NumPy/SciPy reference in `tool/reference_extras.py`.
+`tool/make_fixtures.py` regenerates the references.
 
 ## Performance
 
@@ -309,6 +321,7 @@ two real frames into each complex FFT. `tool/benchmark.dart` measures it on your
 | Part | Ported from / follows | Licence |
 |---|---|---|
 | Butterworth design (`butter`, `buttap`, `lp2hp_zpk`, `lp2bp_zpk`, `bilinear_zpk`, `zpk2sos`), `sosfilt`, `sosfiltfilt`, `sosfilt_zi`, `lfilter_zi`, `resample_poly`, `firwin`, `windows.kaiser`, `get_window('hann')` | [SciPy](https://github.com/scipy/scipy) `scipy.signal` | BSD-3-Clause |
+| `firwin2` (tone balance FIR), `fftconvolve`, `welch` (long-term spectrum) | [SciPy](https://github.com/scipy/scipy) `scipy.signal` | BSD-3-Clause |
 | `uniform_filter` (mask smoothing) | [SciPy](https://github.com/scipy/scipy) `scipy.ndimage` | BSD-3-Clause |
 | WAV decoding rules | [SciPy](https://github.com/scipy/scipy) `scipy.io.wavfile` | BSD-3-Clause |
 | `rfft`/`irfft` semantics, `percentile`, `interp`, `linspace`, `argsort(kind="stable")` | [NumPy](https://github.com/numpy/numpy) | BSD-3-Clause |
