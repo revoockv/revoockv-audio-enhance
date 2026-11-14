@@ -8,25 +8,9 @@ import '../loudness/recording_analysis.dart';
 import '../math/numeric.dart';
 import '../noise/noise_reducer.dart';
 import '../trim/silence_trimmer.dart';
+import '../task/audio_progress.dart';
+import '../task/audio_task.dart';
 import 'enhance_settings.dart';
-
-/// The step of the chain that has just started.
-final class EnhanceProgress {
-  /// 1-based number of the step.
-  final int step;
-
-  /// Number of steps.
-  final int steps;
-
-  /// What the step does, in English ("Reducing noise").
-  final String label;
-
-  /// Creates a new [EnhanceProgress].
-  const EnhanceProgress({required this.step, required this.steps, required this.label});
-
-  /// Part of the work done before this step, 0.0-1.0.
-  double get fraction => (step - 1) / steps;
-}
 
 /// The enhanced audio and what was measured before and after.
 final class EnhanceResult {
@@ -62,8 +46,11 @@ final class EnhanceResult {
 /// Runs the whole vocal chain: high-pass → noise reduction → EQ → de-esser → compressor →
 /// loudness → limiter → silence trim.
 ///
-/// Everything is synchronous and CPU-bound; in an app, run it off the UI thread
-/// (for example with `Isolate.run`).
+/// Three ways to call every operation:
+/// - [enhance] / [analyze] run right here, synchronously; pass `onProgress` to follow the steps;
+/// - [enhanceAsync] / [analyzeAsync] run in the background and give a [Future];
+/// - [enhanceTask] runs in the background and gives an [AudioTask]: a [Stream] of progress, the
+///   result and `cancel()`.
 final class VocalEnhancer {
   static const double _maxGainDb = 30.0;
   static const int _loudnessPasses = 4;
@@ -94,31 +81,50 @@ final class VocalEnhancer {
   /// Measures [audio].
   RecordingAnalysis analyze(PcmAudio audio) => _loudness.measure(audio);
 
-  /// Processes [audio] with [settings]; [onProgress] is called when every step starts.
+  /// Measures [audio] in the background.
+  Future<RecordingAnalysis> analyzeAsync(PcmAudio audio) =>
+      AudioTask<RecordingAnalysis>.start((AudioProgressListener report) => VocalEnhancer().analyze(audio)).result;
+
+  /// [enhance] in the background, without progress reports.
+  Future<EnhanceResult> enhanceAsync(PcmAudio audio, {EnhanceSettings settings = const EnhanceSettings()}) =>
+      enhanceTask(audio, settings: settings).result;
+
+  /// [enhance] in the background: listen to [AudioTask.progress] (optional), await
+  /// [AudioTask.result], or [AudioTask.cancel] it.
+  AudioTask<EnhanceResult> enhanceTask(PcmAudio audio, {EnhanceSettings settings = const EnhanceSettings()}) =>
+      AudioTask<EnhanceResult>.start(
+        (AudioProgressListener report) => VocalEnhancer().enhance(audio, settings: settings, onProgress: report),
+      );
+
+  /// Processes [audio] with [settings]; [onProgress] is called when every step starts, and
+  /// during the longer steps too.
   EnhanceResult enhance(
     PcmAudio audio, {
     EnhanceSettings settings = const EnhanceSettings(),
-    void Function(EnhanceProgress progress)? onProgress,
+    AudioProgressListener? onProgress,
   }) {
     final int rate = audio.sampleRate;
-    final List<(String, Samples Function(Samples))> chain = <(String, Samples Function(Samples))>[
-      ('Removing rumble', (Samples s) => _highPass(s, rate, settings)),
-      ('Reducing noise', (Samples s) => _reduceNoise(s, rate, settings)),
-      ('Shaping the tone', (Samples s) => _equalize(s, rate, settings)),
-      ('Taming sibilance', (Samples s) => _dynamics.deEss(s, rate, maxReductionDb: settings.deEssDb)),
-      ('Evening out the dynamics', (Samples s) => _compress(s, rate, settings)),
-      ('Setting the loudness', (Samples s) => _normalize(s, rate, settings)),
-      ('Limiting the peaks', (Samples s) => _limit(s, rate, settings)),
-    ];
+    final List<(String, Samples Function(Samples, void Function(double)))> chain =
+        <(String, Samples Function(Samples, void Function(double)))>[
+          ('Removing rumble', (Samples s, _) => _highPass(s, rate, settings)),
+          ('Reducing noise', (Samples s, void Function(double) part) => _reduceNoise(s, rate, settings, part)),
+          ('Shaping the tone', (Samples s, _) => _equalize(s, rate, settings)),
+          ('Taming sibilance', (Samples s, _) => _dynamics.deEss(s, rate, maxReductionDb: settings.deEssDb)),
+          ('Evening out the dynamics', (Samples s, _) => _compress(s, rate, settings)),
+          ('Setting the loudness', (Samples s, _) => _normalize(s, rate, settings)),
+          ('Limiting the peaks', (Samples s, _) => _limit(s, rate, settings)),
+        ];
     final int steps = chain.length + 2;
-    void report(int step, String label) => onProgress?.call(EnhanceProgress(step: step, steps: steps, label: label));
+    void report(int step, String label, [double part = 0]) =>
+        onProgress?.call(AudioProgress(step: step, steps: steps, label: label, stepFraction: part));
 
     report(1, 'Measuring the recording');
     final RecordingAnalysis before = _loudness.measure(audio);
     Samples samples = audio.samples;
     for (int i = 0; i < chain.length; i++) {
-      report(i + 2, chain[i].$1);
-      samples = chain[i].$2(samples);
+      final (String label, Samples Function(Samples, void Function(double)) run) = chain[i];
+      report(i + 2, label);
+      samples = run(samples, (double part) => report(i + 2, label, part));
     }
     report(steps, 'Trimming the silence');
     int start = 0;
@@ -143,13 +149,15 @@ final class VocalEnhancer {
     return _filters.highPass(samples, rate, cornerHz: settings.highPassHz);
   }
 
-  Samples _reduceNoise(Samples samples, int rate, EnhanceSettings settings) => _noise.reduce(
-    samples,
-    rate,
-    reductionDb: settings.noiseReductionDb,
-    sensitivity: settings.noiseSensitivity,
-    profileSeconds: settings.noiseProfileSeconds,
-  );
+  Samples _reduceNoise(Samples samples, int rate, EnhanceSettings settings, void Function(double) part) =>
+      _noise.reduce(
+        samples,
+        rate,
+        reductionDb: settings.noiseReductionDb,
+        sensitivity: settings.noiseSensitivity,
+        profileSeconds: settings.noiseProfileSeconds,
+        onProgress: part,
+      );
 
   Samples _equalize(Samples samples, int rate, EnhanceSettings settings) => _filters.equalize(
     samples,

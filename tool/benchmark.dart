@@ -36,7 +36,7 @@ void _run(PcmAudio audio) {
   final Stopwatch watch = Stopwatch()..start();
   final EnhanceResult result = VocalEnhancer().enhance(
     audio,
-    onProgress: (EnhanceProgress p) => print('${watch.elapsedMilliseconds} ms  ${p.label}'),
+    onProgress: (AudioProgress p) => print('${watch.elapsedMilliseconds} ms  ${p.label}'),
   );
   print('${watch.elapsedMilliseconds} ms  done: ${result.after}');
 }

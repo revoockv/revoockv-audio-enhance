@@ -128,14 +128,14 @@ void main() {
             trimSilence: (s['trim_silence'] as num) > 0,
             trimPaddingSeconds: (s['trim_padding_s'] as num).toDouble(),
           );
-          final List<EnhanceProgress> steps = <EnhanceProgress>[];
+          final List<AudioProgress> steps = <AudioProgress>[];
           final EnhanceResult result = enhancer.enhance(
             PcmAudio(samples: input, sampleRate: rate),
             settings: settings,
             onProgress: steps.add,
           );
           expect(<int>[result.keptFrom, result.keptTo], chain['kept']);
-          expect(steps, hasLength(steps.first.steps));
+          expect(steps.map((AudioProgress p) => p.step).toSet(), hasLength(steps.first.steps));
           _expectClose(result.audio.samples, load('chain_$key'), tolerance: 1e-5);
         });
       }

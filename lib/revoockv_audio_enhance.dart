@@ -16,4 +16,6 @@ export 'src/filters/windows.dart';
 export 'src/loudness/loudness_meter.dart';
 export 'src/loudness/recording_analysis.dart';
 export 'src/noise/noise_reducer.dart';
+export 'src/task/audio_progress.dart';
+export 'src/task/audio_task.dart';
 export 'src/trim/silence_trimmer.dart';

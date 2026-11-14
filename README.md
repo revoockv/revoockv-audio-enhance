@@ -10,6 +10,7 @@ any tool on its own.
 
 - [Is it for me?](#is-it-for-me)
 - [Quick start](#quick-start)
+- [Three ways to call it](#three-ways-to-call-it)
 - [Use cases](#use-cases)
 - [The chain](#the-chain) · [Settings](#settings) · [Presets](#presets)
 - [Limits](#limits) · [Accuracy](#accuracy) · [Performance](#performance)
@@ -56,6 +57,54 @@ Future<void> main() async {
 `package:revoockv_audio_enhance/io.dart` reads and writes files and needs `dart:io`. Everything
 else works on bytes and lists, so it also runs on the web.
 
+## Three ways to call it
+
+Every operation of `VocalEnhancer` can be called with or without following its progress:
+
+| Call | Returns | Runs | Progress |
+|---|---|---|---|
+| `enhance(audio)` / `analyze(audio)` | the value | right here, synchronously | none |
+| `enhance(audio, onProgress: …)` | the value | right here, synchronously | callback |
+| `enhanceAsync(audio)` / `analyzeAsync(audio)` | `Future` | background isolate | none |
+| `enhanceTask(audio)` | `AudioTask` | background isolate | `Stream<AudioProgress>`, plus `cancel()` |
+
+```dart
+final VocalEnhancer enhancer = VocalEnhancer();
+
+// 1. Synchronous — in a script, a server, or inside your own isolate.
+final EnhanceResult a = enhancer.enhance(take);
+
+// 2. In the background, only the result.
+final EnhanceResult b = await enhancer.enhanceAsync(take);
+
+// 3. In the background, with a progress stream; listening is optional.
+final AudioTask<EnhanceResult> task = enhancer.enhanceTask(take);
+task.progress.listen((AudioProgress p) => print('${(p.fraction * 100).round()} % ${p.label}'));
+final EnhanceResult c = await task.result;
+```
+
+**Any single tool** runs the same way through `AudioTask.start`. The work receives a `report`
+function; pass it the tool's progress if it has one:
+
+```dart
+final AudioTask<Samples> task = AudioTask<Samples>.start(
+  (AudioProgressListener report) => const NoiseReducer().reduce(
+    take.samples,
+    take.sampleRate,
+    reductionDb: 16,
+    sensitivity: 1.5,
+    profileSeconds: 0,
+    onProgress: (double part) => report(AudioProgress.single('Reducing noise', part)),
+  ),
+);
+final Samples cleaned = await task.result;
+```
+
+`task.cancel()` stops the work at once; `task.result` then fails with
+`AudioTaskCancelledException`, and errors of the work arrive in `task.result` too. On the web
+there are no isolates: the same API runs the work on the main thread, and `cancel()` only helps
+before it has started.
+
 ## Use cases
 
 ### 1. Clean up a recorded vocal take (the main one)
@@ -73,27 +122,18 @@ final EnhanceResult result = VocalEnhancer().enhance(
 
 ### 2. Run it in a Flutter app without freezing the UI, with a progress bar
 
-The work is synchronous and CPU-bound, so run it in another isolate. Progress comes back through
-a port:
+`enhanceTask` runs the chain in a background isolate and gives a `Stream` of progress:
 
 ```dart
-import 'dart:isolate';
-
-Future<EnhanceResult> enhanceInBackground(PcmAudio take, void Function(double) onProgress) async {
-  final ReceivePort progress = ReceivePort();
-  progress.listen((Object? fraction) => onProgress(fraction! as double));
-  final SendPort port = progress.sendPort;
-  try {
-    return await Isolate.run(
-      () => VocalEnhancer().enhance(take, onProgress: (EnhanceProgress p) => port.send(p.fraction)),
-    );
-  } finally {
-    progress.close();
-  }
-}
+final AudioTask<EnhanceResult> task = VocalEnhancer().enhanceTask(take);
+task.progress.listen((AudioProgress p) => setState(() => _progress = p.fraction)); // 0.0-1.0
+// task.cancel() when the user leaves the page
+final EnhanceResult result = await task.result;
 ```
 
-`EnhanceProgress.label` names the step ("Reducing noise") if you want to show it.
+In a widget a `StreamBuilder<AudioProgress>(stream: task.progress, …)` works as well.
+`AudioProgress.label` names the step ("Reducing noise"); the longer steps also report how far
+they are (`stepFraction`), so the bar keeps moving.
 
 ### 3. Check the microphone or the input level before recording
 
