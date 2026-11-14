@@ -18,6 +18,7 @@ export 'src/loudness/loudness_meter.dart';
 export 'src/loudness/recording_analysis.dart';
 export 'src/math/spectral.dart';
 export 'src/noise/noise_reducer.dart';
+export 'src/stereo/mono_widener.dart';
 export 'src/stereo/stereo_aligner.dart';
 export 'src/task/audio_progress.dart';
 export 'src/task/audio_task.dart';
