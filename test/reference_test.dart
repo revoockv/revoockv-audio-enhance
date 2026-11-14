@@ -174,8 +174,10 @@ void main() {
             // The reference keeps the 0.1 cap of 30 dB; these signals need far less gain.
             maxGainDb: preset.settings.maxGainDb,
           );
+          // The reference has no widening; it is tested on its own (mono_widener_test.dart).
           _expectSameSettings(
             preset.settings.copyWith(
+              widenMono: false,
               trimSilence: settings.trimSilence,
               trimPaddingSeconds: settings.trimPaddingSeconds,
             ),
@@ -225,6 +227,7 @@ EnhanceSettings _settingsOf(Map<String, dynamic> s) {
     toneMaxBoostDb: 0,
     toneMaxCutDb: 0,
     expanderRatio: 1,
+    widenMono: false,
     maxGainDb: 30,
     highPassHz: v('high_pass_hz'),
     noiseReductionDb: v('noise_reduction_db'),
@@ -255,6 +258,7 @@ void _expectSameSettings(EnhanceSettings a, EnhanceSettings b) {
     s.noiseSensitivity, s.noiseProfileSeconds, s.mudCutDb, s.mudHz, s.presenceDb, s.presenceHz, s.airDb, s.airHz,
     s.deEssDb, s.compressionRatio, s.compressionThresholdDb, s.compressionAttackSeconds,
     s.compressionReleaseSeconds, s.expanderRatio, s.expanderBelowDb, s.expanderFloorDb, s.targetLufs, s.maxGainDb,
+    s.widenMono, s.monoWidthDb,
     s.truePeakDb, s.limiterReleaseSeconds, s.trimSilence, s.trimPaddingSeconds,
   ];
   expect(values(a), values(b));

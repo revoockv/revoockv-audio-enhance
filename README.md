@@ -24,6 +24,8 @@ lesson, an interview — and want it to sound better before you play, share or e
 - the hum, rumble and steady room noise (fan, fridge, hiss) are lowered;
 - the tone is balanced automatically: a dull, boxy take gets its presence and air back;
 - the hollow sound of the two spaced microphones of a phone is removed (stereo alignment);
+- a mono take becomes stereo with a little room around the voice — and summed back to mono it
+  is exactly the original, so a phone speaker loses nothing;
 - the peaks are evened out while the pauses stay quiet, so the room does not come up with the
   voice; softer "s" sounds;
 - the file ends up at a standard loudness (−14 LUFS by default, like streaming services) and
@@ -253,9 +255,10 @@ Any decoder that gives float samples in −1…1 works too: build
 | 6 | `DynamicsProcessor.deEss` | lowers the 5–9 kHz band while it dominates ("s", "sh") |
 | 7 | `DynamicsProcessor.compress` | soft-knee compressor; by default it touches only the peaks |
 | 8 | `DynamicsProcessor.expand` | downward expander: keeps the pauses and the room quiet |
-| 9 | `LoudnessMeter` + gain | normalises to a target integrated loudness (ITU-R BS.1770, LUFS) |
-| 10 | `DynamicsProcessor.limit` | look-ahead true-peak limiter (4× oversampled peaks) |
-| 11 | `SilenceTrimmer` | optional: cuts the silence before and after the voice |
+| 9 | `MonoWidener` | mono → mid/side stereo: early reflections on the sides, mono-compatible |
+| 10 | `LoudnessMeter` + gain | normalises to a target integrated loudness (ITU-R BS.1770, LUFS) |
+| 11 | `DynamicsProcessor.limit` | look-ahead true-peak limiter (4× oversampled peaks) |
+| 12 | `SilenceTrimmer` | optional: cuts the silence before and after the voice |
 
 ## Settings
 
@@ -277,6 +280,7 @@ Any decoder that gives float samples in −1…1 works too: build
 | `compressionAttackSeconds` / `ReleaseSeconds` | 0.01 / 0.15 | compressor speed |
 | `expanderRatio` | 2 | 1 = off |
 | `expanderBelowDb` / `expanderFloorDb` | 20 / −12 | works under loudness − 20 dB, lowers by at most 12 dB |
+| `widenMono` / `monoWidthDb` | true / −12 | make a mono take stereo, the sides this far under the voice |
 | `targetLufs` | −15 | final loudness; −14 for streaming, −16 for podcasts, −23 for broadcast |
 | `maxGainDb` | 40 | most the loudness step raises a quiet take |
 | `truePeakDb` | −1 | limiter ceiling in dBTP |

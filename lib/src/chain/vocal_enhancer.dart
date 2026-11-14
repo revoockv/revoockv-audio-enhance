@@ -7,6 +7,7 @@ import '../loudness/loudness_meter.dart';
 import '../loudness/recording_analysis.dart';
 import '../math/numeric.dart';
 import '../noise/noise_reducer.dart';
+import '../stereo/mono_widener.dart';
 import '../stereo/stereo_aligner.dart';
 import '../tone/tone_balancer.dart';
 import '../trim/silence_trimmer.dart';
@@ -46,7 +47,7 @@ final class EnhanceResult {
 }
 
 /// Runs the whole vocal chain: stereo alignment → tone balance → high-pass → noise reduction →
-/// EQ → de-esser → compressor → expander → loudness → limiter → silence trim.
+/// EQ → de-esser → compressor → expander → mono widening → loudness → limiter → silence trim.
 ///
 /// Three ways to call every operation:
 /// - [enhance] / [analyze] run right here, synchronously; pass `onProgress` to follow the steps;
@@ -65,6 +66,7 @@ final class VocalEnhancer {
   final SilenceTrimmer _trimmer;
   final StereoAligner _aligner;
   final ToneBalancer _tone;
+  final MonoWidener _widener;
 
   /// Creates a new [VocalEnhancer].
   factory VocalEnhancer() {
@@ -78,10 +80,20 @@ final class VocalEnhancer {
       const SilenceTrimmer(),
       const StereoAligner(),
       const ToneBalancer(),
+      const MonoWidener(),
     );
   }
 
-  VocalEnhancer._(this._filters, this._loudness, this._dynamics, this._noise, this._trimmer, this._aligner, this._tone);
+  VocalEnhancer._(
+    this._filters,
+    this._loudness,
+    this._dynamics,
+    this._noise,
+    this._trimmer,
+    this._aligner,
+    this._tone,
+    this._widener,
+  );
 
   /// Measures [audio].
   RecordingAnalysis analyze(PcmAudio audio) => _loudness.measure(audio);
@@ -119,6 +131,10 @@ final class VocalEnhancer {
           ('Taming sibilance', (Samples s, _) => _dynamics.deEss(s, rate, maxReductionDb: settings.deEssDb)),
           ('Evening out the dynamics', (Samples s, _) => _compress(s, rate, settings)),
           ('Quieting the pauses', (Samples s, _) => _expand(s, rate, settings)),
+          (
+            'Widening the stereo',
+            (Samples s, _) => settings.widenMono ? _widener.widen(s, rate, widthDb: settings.monoWidthDb) : s,
+          ),
           ('Setting the loudness', (Samples s, _) => _normalize(s, rate, settings)),
           ('Limiting the peaks', (Samples s, _) => _limit(s, rate, settings)),
         ];
