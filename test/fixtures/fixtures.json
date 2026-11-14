@@ -1,0 +1,252 @@
+{
+  "mono48": {
+    "sample_rate": 48000,
+    "channels": 1,
+    "frames": 57600,
+    "k_weighting": [
+      [
+        1.5351248595869702,
+        -2.6916961894063807,
+        1.19839281085285,
+        1.0,
+        -1.6906592931824103,
+        0.7324807742158501
+      ],
+      [
+        1.0,
+        -2.0,
+        1.0,
+        1.0,
+        -1.9900474548339797,
+        0.9900722503662099
+      ]
+    ],
+    "integrated_lufs": -18.618330281560283,
+    "true_peak": 0.902707850767826,
+    "measure": {
+      "duration_s": 1.2,
+      "sample_rate": 48000,
+      "channels": 1,
+      "integrated_lufs": -18.618330281560283,
+      "true_peak_db": -0.8890556100868674,
+      "clipped_percent": 0.0,
+      "noise_floor_db": -52.09458141369068,
+      "signal_to_noise_db": 36.84262447387266
+    },
+    "kept_range": [
+      12000,
+      57600
+    ],
+    "chains": {
+      "natural": {
+        "settings": {
+          "high_pass_hz": 80.0,
+          "noise_reduction_db": 16.0,
+          "noise_sensitivity": 1.5,
+          "noise_profile_seconds": 0.0,
+          "mud_cut_db": -2.0,
+          "mud_hz": 250.0,
+          "presence_db": 1.5,
+          "presence_hz": 3500.0,
+          "air_db": 2.0,
+          "air_hz": 10000.0,
+          "de_ess_db": 6.0,
+          "compression_ratio": 3.0,
+          "compression_threshold_db": -2.0,
+          "compression_attack_s": 0.01,
+          "compression_release_s": 0.15,
+          "target_lufs": -14.0,
+          "true_peak_db": -1.0,
+          "limiter_release_s": 0.08,
+          "trim_silence": 0.0,
+          "trim_padding_s": 0.3
+        },
+        "kept": [
+          0,
+          57600
+        ]
+      },
+      "studio": {
+        "settings": {
+          "high_pass_hz": 80.0,
+          "noise_reduction_db": 22.0,
+          "noise_sensitivity": 1.5,
+          "noise_profile_seconds": 0.0,
+          "mud_cut_db": -3.0,
+          "mud_hz": 250.0,
+          "presence_db": 2.5,
+          "presence_hz": 3500.0,
+          "air_db": 3.0,
+          "air_hz": 10000.0,
+          "de_ess_db": 8.0,
+          "compression_ratio": 4.0,
+          "compression_threshold_db": -4.0,
+          "compression_attack_s": 0.01,
+          "compression_release_s": 0.15,
+          "target_lufs": -14.0,
+          "true_peak_db": -1.0,
+          "limiter_release_s": 0.08,
+          "trim_silence": 1.0,
+          "trim_padding_s": 0.05
+        },
+        "kept": [
+          12000,
+          57600
+        ]
+      },
+      "loudness": {
+        "settings": {
+          "high_pass_hz": 0.0,
+          "noise_reduction_db": 0.0,
+          "noise_sensitivity": 1.5,
+          "noise_profile_seconds": 0.0,
+          "mud_cut_db": 0.0,
+          "mud_hz": 250.0,
+          "presence_db": 0.0,
+          "presence_hz": 3500.0,
+          "air_db": 0.0,
+          "air_hz": 10000.0,
+          "de_ess_db": 0.0,
+          "compression_ratio": 1.0,
+          "compression_threshold_db": -2.0,
+          "compression_attack_s": 0.01,
+          "compression_release_s": 0.15,
+          "target_lufs": -14.0,
+          "true_peak_db": -1.0,
+          "limiter_release_s": 0.08,
+          "trim_silence": 0.0,
+          "trim_padding_s": 0.3
+        },
+        "kept": [
+          0,
+          57600
+        ]
+      }
+    }
+  },
+  "stereo44": {
+    "sample_rate": 44100,
+    "channels": 2,
+    "frames": 44100,
+    "k_weighting": [
+      [
+        1.5308412300503478,
+        -2.6509799951547297,
+        1.169079079921587,
+        1.0,
+        -1.6636551132560204,
+        0.7125954280732254
+      ],
+      [
+        1.0,
+        -2.0,
+        1.0,
+        1.0,
+        -1.989169673629796,
+        0.9891990357870393
+      ]
+    ],
+    "integrated_lufs": -15.104021474522943,
+    "true_peak": 0.9012254795837499,
+    "measure": {
+      "duration_s": 1.0,
+      "sample_rate": 44100,
+      "channels": 2,
+      "integrated_lufs": -15.104021474522943,
+      "true_peak_db": -0.9033307667005421,
+      "clipped_percent": 0.0,
+      "noise_floor_db": -52.10204737779759,
+      "signal_to_noise_db": 37.0393242646277
+    },
+    "kept_range": [
+      11025,
+      41895
+    ],
+    "chains": {
+      "natural": {
+        "settings": {
+          "high_pass_hz": 80.0,
+          "noise_reduction_db": 16.0,
+          "noise_sensitivity": 1.5,
+          "noise_profile_seconds": 0.0,
+          "mud_cut_db": -2.0,
+          "mud_hz": 250.0,
+          "presence_db": 1.5,
+          "presence_hz": 3500.0,
+          "air_db": 2.0,
+          "air_hz": 10000.0,
+          "de_ess_db": 6.0,
+          "compression_ratio": 3.0,
+          "compression_threshold_db": -2.0,
+          "compression_attack_s": 0.01,
+          "compression_release_s": 0.15,
+          "target_lufs": -14.0,
+          "true_peak_db": -1.0,
+          "limiter_release_s": 0.08,
+          "trim_silence": 0.0,
+          "trim_padding_s": 0.3
+        },
+        "kept": [
+          0,
+          44100
+        ]
+      },
+      "studio": {
+        "settings": {
+          "high_pass_hz": 80.0,
+          "noise_reduction_db": 22.0,
+          "noise_sensitivity": 1.5,
+          "noise_profile_seconds": 0.0,
+          "mud_cut_db": -3.0,
+          "mud_hz": 250.0,
+          "presence_db": 2.5,
+          "presence_hz": 3500.0,
+          "air_db": 3.0,
+          "air_hz": 10000.0,
+          "de_ess_db": 8.0,
+          "compression_ratio": 4.0,
+          "compression_threshold_db": -4.0,
+          "compression_attack_s": 0.01,
+          "compression_release_s": 0.15,
+          "target_lufs": -14.0,
+          "true_peak_db": -1.0,
+          "limiter_release_s": 0.08,
+          "trim_silence": 1.0,
+          "trim_padding_s": 0.05
+        },
+        "kept": [
+          11025,
+          41895
+        ]
+      },
+      "loudness": {
+        "settings": {
+          "high_pass_hz": 0.0,
+          "noise_reduction_db": 0.0,
+          "noise_sensitivity": 1.5,
+          "noise_profile_seconds": 0.0,
+          "mud_cut_db": 0.0,
+          "mud_hz": 250.0,
+          "presence_db": 0.0,
+          "presence_hz": 3500.0,
+          "air_db": 0.0,
+          "air_hz": 10000.0,
+          "de_ess_db": 0.0,
+          "compression_ratio": 1.0,
+          "compression_threshold_db": -2.0,
+          "compression_attack_s": 0.01,
+          "compression_release_s": 0.15,
+          "target_lufs": -14.0,
+          "true_peak_db": -1.0,
+          "limiter_release_s": 0.08,
+          "trim_silence": 0.0,
+          "trim_padding_s": 0.3
+        },
+        "kept": [
+          0,
+          44100
+        ]
+      }
+    }
+  }
+}
