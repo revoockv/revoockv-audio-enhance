@@ -115,19 +115,10 @@ void main() {
       });
 
       final Map<String, dynamic> chains = info['chains'] as Map<String, dynamic>;
-      for (final EnhancePreset preset in EnhancePreset.values) {
-        final String key = switch (preset) {
-          EnhancePreset.natural => 'natural',
-          EnhancePreset.studio => 'studio',
-          EnhancePreset.loudnessOnly => 'loudness',
-        };
-        test('whole chain, $key preset', () {
+      for (final String key in <String>['natural', 'studio', 'loudness']) {
+        test('whole 0.1 chain, $key preset of the Python engine', () {
           final Map<String, dynamic> chain = chains[key] as Map<String, dynamic>;
-          final Map<String, dynamic> s = chain['settings'] as Map<String, dynamic>;
-          final EnhanceSettings settings = preset.settings.copyWith(
-            trimSilence: (s['trim_silence'] as num) > 0,
-            trimPaddingSeconds: (s['trim_padding_s'] as num).toDouble(),
-          );
+          final EnhanceSettings settings = _settingsOf(chain['settings'] as Map<String, dynamic>);
           final List<AudioProgress> steps = <AudioProgress>[];
           final EnhanceResult result = enhancer.enhance(
             PcmAudio(samples: input, sampleRate: rate),
@@ -137,6 +128,65 @@ void main() {
           expect(<int>[result.keptFrom, result.keptTo], chain['kept']);
           expect(steps.map((AudioProgress p) => p.step).toSet(), hasLength(steps.first.steps));
           _expectClose(result.audio.samples, load('chain_$key'), tolerance: 1e-5);
+        });
+      }
+
+      test('the classic preset is the 0.1 natural chain', () {
+        final Map<String, dynamic> natural = chains['natural'] as Map<String, dynamic>;
+        _expectSameSettings(EnhancePreset.classic.settings, _settingsOf(natural['settings'] as Map<String, dynamic>));
+      });
+
+      // 0.2 steps, against tool/reference_extras.py
+      if (channels == 2) {
+        test('stereo alignment', () {
+          final Samples delayed = load('input_delayed');
+          expect(const StereoAligner().lagOf(delayed, rate), -13);
+          _expectClose(const StereoAligner().align(delayed, rate), load('align'));
+        });
+      }
+
+      test('tone balance correction and filter', () {
+        final (List<double> _, Float64List correction) = const ToneBalancer().correction(input, rate);
+        final List<dynamic> expected = info['tone_correction'] as List<dynamic>;
+        expect(correction.length, expected.length);
+        for (int i = 0; i < correction.length; i++) {
+          expect(correction[i], closeTo((expected[i] as num).toDouble(), 1e-6), reason: 'band $i');
+        }
+        _expectClose(const ToneBalancer().balance(input, rate), load('auto_eq'), tolerance: 1e-5);
+      });
+
+      test('expander', () {
+        _expectClose(dynamics.expand(input, rate, belowDb: 20, ratio: 2, floorDb: -12), load('expand'));
+      });
+
+      final Map<String, dynamic> chainsV2 = info['chains_v2'] as Map<String, dynamic>;
+      for (final EnhancePreset preset in <EnhancePreset>[EnhancePreset.natural, EnhancePreset.studio]) {
+        test('whole 0.2 chain, ${preset.name} preset', () {
+          final Map<String, dynamic> chain = chainsV2[preset.name] as Map<String, dynamic>;
+          final Map<String, dynamic> extras = chain['extras'] as Map<String, dynamic>;
+          final EnhanceSettings settings = _settingsOf(chain['settings'] as Map<String, dynamic>).copyWith(
+            alignStereo: (extras['align'] as num) > 0,
+            toneMaxBoostDb: (extras['max_boost'] as num).toDouble(),
+            toneMaxCutDb: (extras['max_cut'] as num).toDouble(),
+            expanderBelowDb: (extras['below'] as num).toDouble(),
+            expanderRatio: (extras['ratio'] as num).toDouble(),
+            expanderFloorDb: (extras['floor'] as num).toDouble(),
+            // The reference keeps the 0.1 cap of 30 dB; these signals need far less gain.
+            maxGainDb: preset.settings.maxGainDb,
+          );
+          _expectSameSettings(
+            preset.settings.copyWith(
+              trimSilence: settings.trimSilence,
+              trimPaddingSeconds: settings.trimPaddingSeconds,
+            ),
+            settings,
+          );
+          final EnhanceResult result = enhancer.enhance(
+            PcmAudio(samples: input, sampleRate: rate),
+            settings: settings,
+          );
+          expect(<int>[result.keptFrom, result.keptTo], chain['kept']);
+          _expectClose(result.audio.samples, load('chain_v2_${preset.name}'), tolerance: 1e-5);
         });
       }
     });
@@ -165,6 +215,49 @@ Samples _load(String path, int channels) {
   return <Float64List>[
     for (int c = 0; c < channels; c++) Float64List.fromList(all.sublist(c * frames, (c + 1) * frames)),
   ];
+}
+
+/// Settings from the snake_case dictionary of the Python engine; the 0.2 steps are off.
+EnhanceSettings _settingsOf(Map<String, dynamic> s) {
+  double v(String key) => (s[key] as num).toDouble();
+  return EnhanceSettings(
+    alignStereo: false,
+    toneMaxBoostDb: 0,
+    toneMaxCutDb: 0,
+    expanderRatio: 1,
+    maxGainDb: 30,
+    highPassHz: v('high_pass_hz'),
+    noiseReductionDb: v('noise_reduction_db'),
+    noiseSensitivity: v('noise_sensitivity'),
+    noiseProfileSeconds: v('noise_profile_seconds'),
+    mudCutDb: v('mud_cut_db'),
+    mudHz: v('mud_hz'),
+    presenceDb: v('presence_db'),
+    presenceHz: v('presence_hz'),
+    airDb: v('air_db'),
+    airHz: v('air_hz'),
+    deEssDb: v('de_ess_db'),
+    compressionRatio: v('compression_ratio'),
+    compressionThresholdDb: v('compression_threshold_db'),
+    compressionAttackSeconds: v('compression_attack_s'),
+    compressionReleaseSeconds: v('compression_release_s'),
+    targetLufs: v('target_lufs'),
+    truePeakDb: v('true_peak_db'),
+    limiterReleaseSeconds: v('limiter_release_s'),
+    trimSilence: v('trim_silence') > 0,
+    trimPaddingSeconds: v('trim_padding_s'),
+  );
+}
+
+void _expectSameSettings(EnhanceSettings a, EnhanceSettings b) {
+  List<Object?> values(EnhanceSettings s) => <Object?>[
+    s.alignStereo, s.toneMaxBoostDb, s.toneMaxCutDb, s.toneCurve, s.highPassHz, s.noiseReductionDb, //
+    s.noiseSensitivity, s.noiseProfileSeconds, s.mudCutDb, s.mudHz, s.presenceDb, s.presenceHz, s.airDb, s.airHz,
+    s.deEssDb, s.compressionRatio, s.compressionThresholdDb, s.compressionAttackSeconds,
+    s.compressionReleaseSeconds, s.expanderRatio, s.expanderBelowDb, s.expanderFloorDb, s.targetLufs, s.maxGainDb,
+    s.truePeakDb, s.limiterReleaseSeconds, s.trimSilence, s.trimPaddingSeconds,
+  ];
+  expect(values(a), values(b));
 }
 
 double _number(dynamic value) => switch (value) {
