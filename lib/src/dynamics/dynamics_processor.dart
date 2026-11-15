@@ -12,22 +12,39 @@ import '../math/numeric.dart';
 final class DynamicsProcessor {
   static const double _powerFloor = 1e-20;
   static const double _compressorFrameSeconds = 0.005;
-  static const double _kneeDb = 6.0;
+
+  /// Default width of the compressor's soft knee.
+  static const double defaultKneeDb = 6.0;
   static const double _deEssFrameSeconds = 0.0025;
-  static const double _deEssLowHz = 5000.0;
-  static const double _deEssHighHz = 9000.0;
+
+  /// Default band of the de-esser.
+  static const double defaultDeEssLowHz = 5000.0;
+
+  /// Default top of the band of the de-esser.
+  static const double defaultDeEssHighHz = 9000.0;
 
   /// The band counts as sibilant when it is within this many dB of the whole signal.
-  static const double _deEssAboveVoiceDb = 10.0;
+  /// Default level of the band under the voice from which the de-esser acts.
+  static const double defaultDeEssAboveVoiceDb = 10.0;
   static const double _deEssGateDb = -60.0;
-  static const double _deEssAttackSeconds = 0.001;
-  static const double _deEssReleaseSeconds = 0.04;
+
+  /// Default attack of the de-esser.
+  static const double defaultDeEssAttackSeconds = 0.001;
+
+  /// Default release of the de-esser.
+  static const double defaultDeEssReleaseSeconds = 0.04;
   static const int _limiterBlock = 64;
-  static const double _limiterLookaheadSeconds = 0.005;
+
+  /// Default look-ahead of the limiter.
+  static const double defaultLookaheadSeconds = 0.005;
   static const double _minTimeSeconds = 1e-6;
   static const double _expanderFrameSeconds = 0.005;
-  static const double _expanderOpenSeconds = 0.005;
-  static const double _expanderCloseSeconds = 0.15;
+
+  /// Default time the expander takes to open.
+  static const double defaultExpanderOpenSeconds = 0.005;
+
+  /// Default time the expander takes to close.
+  static const double defaultExpanderCloseSeconds = 0.15;
 
   final BiquadFilters _filters;
   final LoudnessMeter _loudness;
@@ -37,24 +54,34 @@ final class DynamicsProcessor {
     : _filters = filters,
       _loudness = loudness;
 
-  /// Lower the 5-9 kHz band by up to [maxReductionDb] while it dominates the voice.
-  Samples deEss(Samples samples, int sampleRate, {required double maxReductionDb}) {
+  /// Lower the [lowHz]–[highHz] band (5–9 kHz) by up to [maxReductionDb] while it is less than
+  /// [aboveVoiceDb] under the voice.
+  Samples deEss(
+    Samples samples,
+    int sampleRate, {
+    required double maxReductionDb,
+    double lowHz = defaultDeEssLowHz,
+    double highHz = defaultDeEssHighHz,
+    double aboveVoiceDb = defaultDeEssAboveVoiceDb,
+    double attackSeconds = defaultDeEssAttackSeconds,
+    double releaseSeconds = defaultDeEssReleaseSeconds,
+  }) {
     if (maxReductionDb <= 0) return samples;
-    final Samples band = _filters.band(samples, sampleRate, lowHz: _deEssLowHz, highHz: _deEssHighHz);
+    final Samples band = _filters.band(samples, sampleRate, lowHz: lowHz, highHz: highHz);
     final int frame = math.max(1, Numeric.roundHalfEven(_deEssFrameSeconds * sampleRate));
     final Float64List bandDb = _frameLevelsDb(band, frame);
     final Float64List fullDb = _frameLevelsDb(samples, frame);
     final Float64List target = Float64List(bandDb.length);
     for (int i = 0; i < target.length; i++) {
-      final double excess = bandDb[i] - (fullDb[i] - _deEssAboveVoiceDb);
+      final double excess = bandDb[i] - (fullDb[i] - aboveVoiceDb);
       final double reduction = bandDb[i] > _deEssGateDb ? excess.clamp(0, maxReductionDb).toDouble() : 0.0;
       target[i] = -reduction;
     }
     final Float64List smoothed = _smooth(
       target,
       frameSeconds: frame / sampleRate,
-      attackSeconds: _deEssAttackSeconds,
-      releaseSeconds: _deEssReleaseSeconds,
+      attackSeconds: attackSeconds,
+      releaseSeconds: releaseSeconds,
     );
     final Float64List gain = _perSample(_dbToGain(smoothed), frame, SampleOps.frames(samples));
     return <Float64List>[
@@ -63,7 +90,8 @@ final class DynamicsProcessor {
     ];
   }
 
-  /// Compress above [thresholdDb] (relative to the loudness of [samples]) with a 6 dB soft knee.
+  /// Compress above [thresholdDb] (relative to the loudness of [samples]) with a soft knee
+  /// [kneeDb] wide.
   Samples compress(
     Samples samples,
     int sampleRate, {
@@ -71,6 +99,7 @@ final class DynamicsProcessor {
     required double thresholdDb,
     required double attackSeconds,
     required double releaseSeconds,
+    double kneeDb = defaultKneeDb,
   }) {
     if (ratio <= 1) return samples;
     final double loudness = _loudness.integratedLufs(samples, sampleRate);
@@ -78,7 +107,7 @@ final class DynamicsProcessor {
     final double threshold = loudness + thresholdDb;
     final int frame = math.max(1, Numeric.roundHalfEven(_compressorFrameSeconds * sampleRate));
     final Float64List levels = _frameLevelsDb(samples, frame);
-    const double half = _kneeDb / 2;
+    final double half = kneeDb / 2;
     final double slope = 1 / ratio - 1;
     final Float64List reduction = Float64List(levels.length);
     for (int i = 0; i < levels.length; i++) {
@@ -87,7 +116,7 @@ final class DynamicsProcessor {
           ? 0.0
           : over >= half
           ? slope * over
-          : slope * (over + half) * (over + half) / (2 * _kneeDb);
+          : slope * (over + half) * (over + half) / (2 * kneeDb);
     }
     final Float64List smoothed = _smooth(
       reduction,
@@ -103,13 +132,16 @@ final class DynamicsProcessor {
 
   /// Downward expander: lowers what is more than [belowDb] under the loudness of [samples] by
   /// [ratio]:1 (at most [floorDb]), so the room and the noise between phrases stay quiet. It
-  /// opens within 5 ms and closes over 150 ms, so note tails fade naturally.
+  /// opens within [openSeconds] (5 ms) and closes over [closeSeconds] (150 ms), so note tails
+  /// fade naturally.
   Samples expand(
     Samples samples,
     int sampleRate, {
     required double belowDb,
     required double ratio,
     required double floorDb,
+    double openSeconds = defaultExpanderOpenSeconds,
+    double closeSeconds = defaultExpanderCloseSeconds,
   }) {
     if (ratio <= 1) return samples;
     final double loudness = _loudness.integratedLufs(samples, sampleRate);
@@ -126,8 +158,8 @@ final class DynamicsProcessor {
     final Float64List smoothed = _smooth(
       reduction,
       frameSeconds: frame / sampleRate,
-      attackSeconds: _expanderOpenSeconds,
-      releaseSeconds: _expanderCloseSeconds,
+      attackSeconds: openSeconds,
+      releaseSeconds: closeSeconds,
     );
     final Float64List gain = _perSample(
       SampleOps.generate(smoothed.length, (int i) => Numeric.dbToAmplitude(-smoothed[i])),
@@ -139,8 +171,14 @@ final class DynamicsProcessor {
     ];
   }
 
-  /// Keep the inter-sample peaks under [ceilingDb] with a 5 ms look-ahead.
-  Samples limit(Samples samples, int sampleRate, {required double ceilingDb, required double releaseSeconds}) {
+  /// Keep the inter-sample peaks under [ceilingDb], looking [lookaheadSeconds] (5 ms) ahead.
+  Samples limit(
+    Samples samples,
+    int sampleRate, {
+    required double ceilingDb,
+    required double releaseSeconds,
+    double lookaheadSeconds = defaultLookaheadSeconds,
+  }) {
     final double ceiling = Numeric.dbToAmplitude(ceilingDb);
     final Float64List peaks = _loudness.peaksReaching(samples, ceiling);
     const int block = _limiterBlock;
@@ -154,7 +192,7 @@ final class DynamicsProcessor {
       }
       needed[b] = math.min(1.0, ceiling / math.max(peak, _powerFloor));
     }
-    final int ahead = math.max(1, (_limiterLookaheadSeconds * sampleRate / block).ceil());
+    final int ahead = math.max(1, (lookaheadSeconds * sampleRate / block).ceil());
     // earliest[i] = min(needed[i … i + ahead]): the gain is down `ahead` blocks before a peak.
     final Float64List earliest = Float64List(blocks);
     for (int b = 0; b < blocks; b++) {
