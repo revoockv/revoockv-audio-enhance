@@ -1,3 +1,9 @@
+## 0.2.1
+
+- `SilenceTrimmer` no longer cuts sung parts of a take that is loud all along (music from the
+  speaker under the voice): silence is now always at least 25 dB under the loudest blocks. Before,
+  the quietest tenth of such a take was taken for the noise floor, and up to half of it was cut.
+
 ## 0.2.0
 
 - New steps: `StereoAligner` (removes the hollow sound of two spaced phone microphones),

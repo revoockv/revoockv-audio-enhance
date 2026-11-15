@@ -10,7 +10,9 @@ import '../math/numeric.dart';
 /// Keeps the part between the first and the last loud block, plus a little padding. A 50 ms
 /// block is loud when it is 10 dB above the noise floor (10th percentile of the blocks) and no
 /// more than 45 dB below the loudest blocks (95th percentile); the second rule keeps breaths and
-/// reverb tails of a clean take that has almost no noise.
+/// reverb tails of a clean take that has almost no noise. Silence is always at least 25 dB under
+/// the loudest blocks: a take that is loud all along (music from the speaker under the voice) has
+/// nothing to cut, however quiet its quietest part.
 final class SilenceTrimmer {
   static const double _blockSeconds = 0.05;
   static const double _fadeSeconds = 0.02;
@@ -19,6 +21,7 @@ final class SilenceTrimmer {
   static const double _loudPercentile = 95;
   static const double _aboveNoiseDb = 10.0;
   static const double _belowLoudDb = 45.0;
+  static const double _silenceBelowLoudDb = 25.0;
 
   /// Creates a new [SilenceTrimmer].
   const SilenceTrimmer();
@@ -31,9 +34,10 @@ final class SilenceTrimmer {
     if (blocks < _minBlocks) return (0, frames);
     final Float64List levels = LoudnessMeter.blockLevelsDb(samples, block, blocks);
     final Float64List sorted = Numeric.sorted(levels);
-    final double threshold = math.max(
-      Numeric.percentileOfSorted(sorted, _noisePercentile) + _aboveNoiseDb,
-      Numeric.percentileOfSorted(sorted, _loudPercentile) - _belowLoudDb,
+    final double loudest = Numeric.percentileOfSorted(sorted, _loudPercentile);
+    final double threshold = math.min(
+      math.max(Numeric.percentileOfSorted(sorted, _noisePercentile) + _aboveNoiseDb, loudest - _belowLoudDb),
+      loudest - _silenceBelowLoudDb,
     );
     int first = -1;
     int last = -1;
