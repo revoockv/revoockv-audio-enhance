@@ -40,4 +40,20 @@ void main() {
     );
     expect((start, end), (0, 12 * rate));
   });
+
+  test('the silence rule can be changed by a parameter and through the settings', () {
+    final Samples loudAllAlong = take(<double?>[-26, -26, -14, -14, -14, -14, -14, -14, -14, -14, -26, -26]);
+    final (int start, int end) = trimmer.keptRange(loudAllAlong, rate, paddingSeconds: 0, silenceBelowLoudDb: 5);
+    expect((start / rate, end / rate), (2.0, 10.0));
+
+    final EnhanceResult result = VocalEnhancer().enhance(
+      PcmAudio(samples: loudAllAlong, sampleRate: rate),
+      settings: EnhancePreset.loudnessOnly.settings.copyWith(
+        trimSilence: true,
+        trimPaddingSeconds: 0,
+        trimSilenceBelowLoudDb: 5,
+      ),
+    );
+    expect((result.keptFrom / rate, result.keptTo / rate), (2.0, 10.0));
+  });
 }

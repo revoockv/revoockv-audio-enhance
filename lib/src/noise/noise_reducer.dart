@@ -12,7 +12,7 @@ import '../math/numeric.dart';
 /// (median and spread of the noise level in every frequency bin) comes from the leading room
 /// tone when the caller says how long it is, otherwise from the quietest 3 % of the recording;
 /// digital silence is never part of it. A bin above the profile passes, a bin inside it is
-/// lowered by the reduction amount, with a soft 6 dB transition. The gain mask is smoothed over
+/// lowered by the reduction amount, with a soft transition (6 dB by default). The gain mask is smoothed over
 /// time and frequency so that steady tones stay steady and no "musical noise" chirps appear.
 ///
 /// The STFT is processed in batches of frames, so memory stays small for long takes.
@@ -24,7 +24,9 @@ final class NoiseReducer {
   static const int _batchFrames = 512;
   static const int _smoothFrames = 5;
   static const int _smoothBins = 3;
-  static const double _transitionDb = 6.0;
+
+  /// Default width of the band around the threshold over which the mask goes from closed to open.
+  static const double defaultTransitionDb = 6.0;
   static const double _quietShare = 0.03;
   static const double _silenceDb = -100.0;
   static const double _quartileLow = 25;
@@ -47,6 +49,7 @@ final class NoiseReducer {
     required double reductionDb,
     required double sensitivity,
     required double profileSeconds,
+    double transitionDb = defaultTransitionDb,
     void Function(double fraction)? onProgress,
   }) {
     if (reductionDb <= 0) return samples;
@@ -64,6 +67,7 @@ final class NoiseReducer {
           reductionDb: reductionDb,
           sensitivity: sensitivity,
           profileFrames: profileFrames,
+          transitionDb: transitionDb,
         ),
     ];
   }
@@ -76,6 +80,7 @@ final class NoiseReducer {
     required double reductionDb,
     required double sensitivity,
     required int profileFrames,
+    required double transitionDb,
   }) {
     final int size = fft.size;
     final int bins = fft.bins;
@@ -102,13 +107,13 @@ final class NoiseReducer {
     // 10 ** (-(1 - keep) * reductionDb / 20) as exp(lowering * (1 - keep)).
     final double lowering = -reductionDb * math.ln10 / 20;
     final double closedGain = math.exp(lowering);
-    // The mask is 0 or 1 outside a 6 dB band around the threshold. Squared magnitudes compared
+    // The mask is 0 or 1 outside a [transitionDb] band around the threshold. Squared magnitudes compared
     // with these bounds (a hair inside them) skip the logarithm for almost every bin.
     final Float64List closedBelow = Float64List(bins);
     final Float64List openAbove = Float64List(bins);
     for (int k = 0; k < bins; k++) {
-      final double below = Numeric.dbToAmplitude(threshold[k] - _transitionDb / 2) * (1 - 1e-9) - _epsilon;
-      final double above = Numeric.dbToAmplitude(threshold[k] + _transitionDb / 2) * (1 + 1e-9) - _epsilon;
+      final double below = Numeric.dbToAmplitude(threshold[k] - transitionDb / 2) * (1 - 1e-9) - _epsilon;
+      final double above = Numeric.dbToAmplitude(threshold[k] + transitionDb / 2) * (1 + 1e-9) - _epsilon;
       closedBelow[k] = below > 0 ? below * below : -1;
       openAbove[k] = above > 0 ? above * above : 0;
     }
@@ -135,7 +140,7 @@ final class NoiseReducer {
             continue;
           }
           final double levelDb = Numeric.amplitudeToDb(math.sqrt(power) + _epsilon);
-          final double value = (levelDb - threshold[k]) / _transitionDb + 0.5;
+          final double value = (levelDb - threshold[k]) / transitionDb + 0.5;
           keep[row + k] = value < 0 ? 0.0 : (value > 1 ? 1.0 : value);
         }
       }

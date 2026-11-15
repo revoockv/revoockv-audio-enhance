@@ -57,7 +57,6 @@ final class EnhanceResult {
 final class VocalEnhancer {
   static const int _loudnessPasses = 4;
   static const double _loudnessToleranceLu = 0.2;
-  static const double _maxExtraDb = 6.0;
 
   final BiquadFilters _filters;
   final LoudnessMeter _loudness;
@@ -123,17 +122,29 @@ final class VocalEnhancer {
     final int rate = audio.sampleRate;
     final List<(String, Samples Function(Samples, void Function(double)))> chain =
         <(String, Samples Function(Samples, void Function(double)))>[
-          ('Aligning the channels', (Samples s, _) => settings.alignStereo ? _aligner.align(s, rate) : s),
+          (
+            'Aligning the channels',
+            (Samples s, _) =>
+                settings.alignStereo ? _aligner.align(s, rate, maxLagSeconds: settings.alignMaxLagSeconds) : s,
+          ),
           ('Balancing the tone', (Samples s, _) => _balanceTone(s, rate, settings)),
           ('Removing rumble', (Samples s, _) => _highPass(s, rate, settings)),
           ('Reducing noise', (Samples s, void Function(double) part) => _reduceNoise(s, rate, settings, part)),
           ('Shaping the tone', (Samples s, _) => _equalize(s, rate, settings)),
-          ('Taming sibilance', (Samples s, _) => _dynamics.deEss(s, rate, maxReductionDb: settings.deEssDb)),
+          ('Taming sibilance', (Samples s, _) => _deEss(s, rate, settings)),
           ('Evening out the dynamics', (Samples s, _) => _compress(s, rate, settings)),
           ('Quieting the pauses', (Samples s, _) => _expand(s, rate, settings)),
           (
             'Widening the stereo',
-            (Samples s, _) => settings.widenMono ? _widener.widen(s, rate, widthDb: settings.monoWidthDb) : s,
+            (Samples s, _) => settings.widenMono
+                ? _widener.widen(
+                    s,
+                    rate,
+                    widthDb: settings.monoWidthDb,
+                    lowHz: settings.monoWidthLowHz,
+                    highHz: settings.monoWidthHighHz,
+                  )
+                : s,
           ),
           ('Setting the loudness', (Samples s, _) => _normalize(s, rate, settings)),
           ('Limiting the peaks', (Samples s, _) => _limit(s, rate, settings)),
@@ -154,8 +165,15 @@ final class VocalEnhancer {
     int start = 0;
     int end = SampleOps.frames(samples);
     if (settings.trimSilence) {
-      (start, end) = _trimmer.keptRange(samples, rate, paddingSeconds: settings.trimPaddingSeconds);
-      samples = _trimmer.cut(samples, rate, start: start, end: end);
+      (start, end) = _trimmer.keptRange(
+        samples,
+        rate,
+        paddingSeconds: settings.trimPaddingSeconds,
+        aboveNoiseDb: settings.trimAboveNoiseDb,
+        belowLoudDb: settings.trimBelowLoudDb,
+        silenceBelowLoudDb: settings.trimSilenceBelowLoudDb,
+      );
+      samples = _trimmer.cut(samples, rate, start: start, end: end, fadeSeconds: settings.trimFadeSeconds);
     }
     final PcmAudio result = PcmAudio(samples: samples, sampleRate: rate);
     return EnhanceResult(
@@ -176,6 +194,7 @@ final class VocalEnhancer {
       curve: settings.toneCurve,
       maxBoostDb: settings.toneMaxBoostDb,
       maxCutDb: settings.toneMaxCutDb,
+      noBoostBelowHz: settings.toneNoBoostBelowHz,
     );
   }
 
@@ -185,6 +204,8 @@ final class VocalEnhancer {
     belowDb: settings.expanderBelowDb,
     ratio: settings.expanderRatio,
     floorDb: settings.expanderFloorDb,
+    openSeconds: settings.expanderOpenSeconds,
+    closeSeconds: settings.expanderCloseSeconds,
   );
 
   Samples _highPass(Samples samples, int rate, EnhanceSettings settings) {
@@ -199,6 +220,7 @@ final class VocalEnhancer {
         reductionDb: settings.noiseReductionDb,
         sensitivity: settings.noiseSensitivity,
         profileSeconds: settings.noiseProfileSeconds,
+        transitionDb: settings.noiseTransitionDb,
         onProgress: part,
       );
 
@@ -216,6 +238,18 @@ final class VocalEnhancer {
     thresholdDb: settings.compressionThresholdDb,
     attackSeconds: settings.compressionAttackSeconds,
     releaseSeconds: settings.compressionReleaseSeconds,
+    kneeDb: settings.compressionKneeDb,
+  );
+
+  Samples _deEss(Samples samples, int rate, EnhanceSettings settings) => _dynamics.deEss(
+    samples,
+    rate,
+    maxReductionDb: settings.deEssDb,
+    lowHz: settings.deEssLowHz,
+    highHz: settings.deEssHighHz,
+    aboveVoiceDb: settings.deEssAboveVoiceDb,
+    attackSeconds: settings.deEssAttackSeconds,
+    releaseSeconds: settings.deEssReleaseSeconds,
   );
 
   Samples _normalize(Samples samples, int rate, EnhanceSettings settings) {
@@ -235,10 +269,11 @@ final class VocalEnhancer {
         rate,
         ceilingDb: settings.truePeakDb,
         releaseSeconds: settings.limiterReleaseSeconds,
+        lookaheadSeconds: settings.limiterLookaheadSeconds,
       );
       final double shortfall = settings.targetLufs - _loudness.integratedLufs(limited, rate);
-      if (!(shortfall > _loudnessToleranceLu) || extraDb >= _maxExtraDb) break;
-      extraDb = math.min(extraDb + shortfall, _maxExtraDb);
+      if (!(shortfall > _loudnessToleranceLu) || extraDb >= settings.limiterMakeupMaxDb) break;
+      extraDb = math.min(extraDb + shortfall, settings.limiterMakeupMaxDb);
     }
     return limited;
   }

@@ -52,7 +52,9 @@ final class ToneBalancer {
   static const double _voicedPercentile = 40;
   static const int _welchSegment = 8192;
   static const int _firTaps = 4097;
-  static const double _noBoostBelowHz = 150;
+
+  /// Default frequency under which the balance only cuts, never boosts.
+  static const double defaultNoBoostBelowHz = 150;
   static const double _levelLowHz = 200;
   static const double _levelHighHz = 4000;
   static const double _maxBand = 0.45;
@@ -62,8 +64,16 @@ final class ToneBalancer {
   /// Creates a new [ToneBalancer].
   const ToneBalancer();
 
-  /// [samples] pulled towards [curve], by at most [maxBoostDb] up and [maxCutDb] down.
-  Samples balance(Samples samples, int sampleRate, {ToneCurve? curve, double maxBoostDb = 12, double maxCutDb = 12}) {
+  /// [samples] pulled towards [curve], by at most [maxBoostDb] up and [maxCutDb] down; nothing
+  /// under [noBoostBelowHz] is boosted.
+  Samples balance(
+    Samples samples,
+    int sampleRate, {
+    ToneCurve? curve,
+    double maxBoostDb = 12,
+    double maxCutDb = 12,
+    double noBoostBelowHz = defaultNoBoostBelowHz,
+  }) {
     if (maxBoostDb <= 0 && maxCutDb <= 0) return samples;
     final (List<double> centres, Float64List correction) = this.correction(
       samples,
@@ -71,6 +81,7 @@ final class ToneBalancer {
       curve: curve,
       maxBoostDb: maxBoostDb,
       maxCutDb: maxCutDb,
+      noBoostBelowHz: noBoostBelowHz,
     );
     final List<double> freqs = <double>[0, ...centres, sampleRate / 2];
     final List<double> gains = <double>[
@@ -87,6 +98,7 @@ final class ToneBalancer {
     ToneCurve? curve,
     double maxBoostDb = 12,
     double maxCutDb = 12,
+    double noBoostBelowHz = defaultNoBoostBelowHz,
   }) {
     final ToneCurve target = curve ?? ToneCurve.balanced;
     final List<int> used = <int>[
@@ -110,7 +122,7 @@ final class ToneBalancer {
       final double next = raw[math.min(n - 1, b + 1)] - level;
       double value = 0.25 * previous + 0.5 * (raw[b] - level) + 0.25 * next;
       value = value.clamp(-maxCutDb, maxBoostDb).toDouble();
-      if (centres[b] < _noBoostBelowHz) value = math.min(value, 0);
+      if (centres[b] < noBoostBelowHz) value = math.min(value, 0);
       out[b] = value;
     }
     return (centres, out);

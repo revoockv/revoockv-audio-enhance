@@ -24,19 +24,30 @@ final class MonoWidener {
     (29.1, -0.27),
     (34.7, 0.21),
   ];
-  static const double _lowHz = 300;
-  static const double _highHz = 7000;
+
+  /// Default bottom of the band of the reflections.
+  static const double defaultLowHz = 300;
+
+  /// Default top of the band of the reflections.
+  static const double defaultHighHz = 7000;
   static const int _order = 2;
 
   /// Creates a new [MonoWidener].
   const MonoWidener();
 
   /// Two channels from the one of [samples], the sides [widthDb] under the voice (for example
-  /// −12 dB); anything but one channel is returned as it is.
-  Samples widen(Samples samples, int sampleRate, {required double widthDb}) {
+  /// −12 dB), the reflections in the [lowHz]–[highHz] band; anything but one channel is returned
+  /// as it is.
+  Samples widen(
+    Samples samples,
+    int sampleRate, {
+    required double widthDb,
+    double lowHz = defaultLowHz,
+    double highHz = defaultHighHz,
+  }) {
     if (samples.length != 1) return samples;
     final Float64List mid = samples.first;
-    final Float64List band = _band(mid, sampleRate);
+    final Float64List band = _band(mid, sampleRate, lowHz, highHz);
     final Float64List sides = Float64List(mid.length);
     for (final (double milliseconds, double gain) in _reflections) {
       final int delay = (milliseconds * sampleRate / 1000).round();
@@ -54,10 +65,10 @@ final class MonoWidener {
     ];
   }
 
-  static Float64List _band(Float64List input, int sampleRate) {
-    final double high = math.min(_highHz, sampleRate * 0.45);
-    if (_lowHz >= high) return Float64List(input.length);
-    final SosFilter filter = Butterworth.bandPass(_order, _lowHz, high, sampleRate.toDouble());
+  static Float64List _band(Float64List input, int sampleRate, double lowHz, double highHz) {
+    final double high = math.min(highHz, sampleRate * 0.45);
+    if (lowHz >= high) return Float64List(input.length);
+    final SosFilter filter = Butterworth.bandPass(_order, lowHz, high, sampleRate.toDouble());
     return filter.filter(input);
   }
 

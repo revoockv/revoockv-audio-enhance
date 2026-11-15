@@ -287,6 +287,40 @@ Any decoder that gives float samples in −1…1 works too: build
 | `limiterReleaseSeconds` | 0.08 | limiter recovery |
 | `trimSilence` / `trimPaddingSeconds` | false / 0.3 | cut silence, keeping this much around the voice |
 
+### Fine tuning
+
+Every value a step used to keep to itself is a setting too, with the old value as its default, so
+you can tune the sound without waiting for a new version of the package:
+
+| Setting | Default | What it does |
+|---|---|---|
+| `alignMaxLagSeconds` | 0.001 | largest delay between the channels the alignment looks for |
+| `toneNoBoostBelowHz` | 150 | the tone balance only cuts below this |
+| `noiseTransitionDb` | 6 | soft band around the noise threshold |
+| `deEssLowHz` / `deEssHighHz` | 5000 / 9000 | band the de-esser lowers |
+| `deEssAboveVoiceDb` | 10 | the de-esser acts when its band is less than this under the voice |
+| `deEssAttackSeconds` / `deEssReleaseSeconds` | 0.001 / 0.04 | de-esser speed |
+| `compressionKneeDb` | 6 | soft knee of the compressor |
+| `expanderOpenSeconds` / `expanderCloseSeconds` | 0.005 / 0.15 | how fast the expander opens and closes |
+| `monoWidthLowHz` / `monoWidthHighHz` | 300 / 7000 | band of the reflections of mono widening |
+| `limiterLookaheadSeconds` | 0.005 | how far ahead the limiter looks |
+| `limiterMakeupMaxDb` | 6 | most gain added back after the limiter |
+| `trimAboveNoiseDb` | 10 | trim: a block is sound this far above the noise floor… |
+| `trimBelowLoudDb` | 45 | …and no further than this under the loudest blocks |
+| `trimSilenceBelowLoudDb` | 25 | trim: silence is always at least this far under the loudest blocks |
+| `trimFadeSeconds` | 0.02 | fade where the take is cut |
+
+```dart
+final settings = EnhancePreset.natural.settings.copyWith(
+  trimSilence: true,
+  trimSilenceBelowLoudDb: 30,
+  expanderCloseSeconds: 0.3,
+);
+```
+
+Each step takes the same values as optional parameters when used on its own, for example
+`SilenceTrimmer().keptRange(samples, rate, paddingSeconds: 0.3, silenceBelowLoudDb: 30)`.
+
 ## Presets
 
 - `EnhancePreset.natural` — the defaults: balanced tone, peak-only compression, quiet pauses;
