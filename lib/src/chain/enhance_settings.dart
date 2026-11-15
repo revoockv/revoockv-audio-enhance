@@ -1,4 +1,9 @@
+import '../dynamics/dynamics_processor.dart';
+import '../noise/noise_reducer.dart';
+import '../stereo/mono_widener.dart';
+import '../stereo/stereo_aligner.dart';
 import '../tone/tone_balancer.dart';
+import '../trim/silence_trimmer.dart';
 
 /// Parameters of every step of the vocal chain; a step whose amount is 0 is skipped.
 ///
@@ -100,6 +105,66 @@ final class EnhanceSettings {
   /// Silence kept before and after the singing when trimming.
   final double trimPaddingSeconds;
 
+  /// Default of [limiterMakeupMaxDb].
+  static const double defaultLimiterMakeupMaxDb = 6.0;
+
+  /// Largest delay between the two channels the stereo alignment looks for.
+  final double alignMaxLagSeconds;
+
+  /// Under this frequency the tone balance only cuts, never boosts.
+  final double toneNoBoostBelowHz;
+
+  /// Width of the soft band around the noise threshold, in dB.
+  final double noiseTransitionDb;
+
+  /// Bottom of the band the de-esser lowers.
+  final double deEssLowHz;
+
+  /// Top of the band the de-esser lowers.
+  final double deEssHighHz;
+
+  /// The de-esser acts when its band is less than this many dB under the whole voice.
+  final double deEssAboveVoiceDb;
+
+  /// Attack time of the de-esser.
+  final double deEssAttackSeconds;
+
+  /// Release time of the de-esser.
+  final double deEssReleaseSeconds;
+
+  /// Width of the soft knee of the compressor, in dB.
+  final double compressionKneeDb;
+
+  /// Time the expander takes to open when the voice comes back.
+  final double expanderOpenSeconds;
+
+  /// Time the expander takes to close after a phrase (longer keeps note tails).
+  final double expanderCloseSeconds;
+
+  /// Bottom of the band of the reflections when widening a mono take.
+  final double monoWidthLowHz;
+
+  /// Top of the band of the reflections when widening a mono take.
+  final double monoWidthHighHz;
+
+  /// How far ahead the limiter looks for a peak.
+  final double limiterLookaheadSeconds;
+
+  /// Most gain added back after the limiter to reach the target loudness, in dB.
+  final double limiterMakeupMaxDb;
+
+  /// When trimming, a 50 ms block is sound when it is this many dB above the noise floor…
+  final double trimAboveNoiseDb;
+
+  /// …and no more than this many dB under the loudest blocks.
+  final double trimBelowLoudDb;
+
+  /// When trimming, silence is always at least this many dB under the loudest blocks.
+  final double trimSilenceBelowLoudDb;
+
+  /// Fade where the take is cut when trimming.
+  final double trimFadeSeconds;
+
   /// Creates new [EnhanceSettings]; the defaults are the "natural" preset.
   const EnhanceSettings({
     this.alignStereo = true,
@@ -132,6 +197,25 @@ final class EnhanceSettings {
     this.limiterReleaseSeconds = 0.08,
     this.trimSilence = false,
     this.trimPaddingSeconds = 0.3,
+    this.alignMaxLagSeconds = StereoAligner.defaultMaxLagSeconds,
+    this.toneNoBoostBelowHz = ToneBalancer.defaultNoBoostBelowHz,
+    this.noiseTransitionDb = NoiseReducer.defaultTransitionDb,
+    this.deEssLowHz = DynamicsProcessor.defaultDeEssLowHz,
+    this.deEssHighHz = DynamicsProcessor.defaultDeEssHighHz,
+    this.deEssAboveVoiceDb = DynamicsProcessor.defaultDeEssAboveVoiceDb,
+    this.deEssAttackSeconds = DynamicsProcessor.defaultDeEssAttackSeconds,
+    this.deEssReleaseSeconds = DynamicsProcessor.defaultDeEssReleaseSeconds,
+    this.compressionKneeDb = DynamicsProcessor.defaultKneeDb,
+    this.expanderOpenSeconds = DynamicsProcessor.defaultExpanderOpenSeconds,
+    this.expanderCloseSeconds = DynamicsProcessor.defaultExpanderCloseSeconds,
+    this.monoWidthLowHz = MonoWidener.defaultLowHz,
+    this.monoWidthHighHz = MonoWidener.defaultHighHz,
+    this.limiterLookaheadSeconds = DynamicsProcessor.defaultLookaheadSeconds,
+    this.limiterMakeupMaxDb = defaultLimiterMakeupMaxDb,
+    this.trimAboveNoiseDb = SilenceTrimmer.defaultAboveNoiseDb,
+    this.trimBelowLoudDb = SilenceTrimmer.defaultBelowLoudDb,
+    this.trimSilenceBelowLoudDb = SilenceTrimmer.defaultSilenceBelowLoudDb,
+    this.trimFadeSeconds = SilenceTrimmer.defaultFadeSeconds,
   });
 
   /// Whether the tone balance runs.
@@ -169,6 +253,25 @@ final class EnhanceSettings {
     double? limiterReleaseSeconds,
     bool? trimSilence,
     double? trimPaddingSeconds,
+    double? alignMaxLagSeconds,
+    double? toneNoBoostBelowHz,
+    double? noiseTransitionDb,
+    double? deEssLowHz,
+    double? deEssHighHz,
+    double? deEssAboveVoiceDb,
+    double? deEssAttackSeconds,
+    double? deEssReleaseSeconds,
+    double? compressionKneeDb,
+    double? expanderOpenSeconds,
+    double? expanderCloseSeconds,
+    double? monoWidthLowHz,
+    double? monoWidthHighHz,
+    double? limiterLookaheadSeconds,
+    double? limiterMakeupMaxDb,
+    double? trimAboveNoiseDb,
+    double? trimBelowLoudDb,
+    double? trimSilenceBelowLoudDb,
+    double? trimFadeSeconds,
   }) => EnhanceSettings(
     alignStereo: alignStereo ?? this.alignStereo,
     toneMaxBoostDb: toneMaxBoostDb ?? this.toneMaxBoostDb,
@@ -200,6 +303,25 @@ final class EnhanceSettings {
     limiterReleaseSeconds: limiterReleaseSeconds ?? this.limiterReleaseSeconds,
     trimSilence: trimSilence ?? this.trimSilence,
     trimPaddingSeconds: trimPaddingSeconds ?? this.trimPaddingSeconds,
+    alignMaxLagSeconds: alignMaxLagSeconds ?? this.alignMaxLagSeconds,
+    toneNoBoostBelowHz: toneNoBoostBelowHz ?? this.toneNoBoostBelowHz,
+    noiseTransitionDb: noiseTransitionDb ?? this.noiseTransitionDb,
+    deEssLowHz: deEssLowHz ?? this.deEssLowHz,
+    deEssHighHz: deEssHighHz ?? this.deEssHighHz,
+    deEssAboveVoiceDb: deEssAboveVoiceDb ?? this.deEssAboveVoiceDb,
+    deEssAttackSeconds: deEssAttackSeconds ?? this.deEssAttackSeconds,
+    deEssReleaseSeconds: deEssReleaseSeconds ?? this.deEssReleaseSeconds,
+    compressionKneeDb: compressionKneeDb ?? this.compressionKneeDb,
+    expanderOpenSeconds: expanderOpenSeconds ?? this.expanderOpenSeconds,
+    expanderCloseSeconds: expanderCloseSeconds ?? this.expanderCloseSeconds,
+    monoWidthLowHz: monoWidthLowHz ?? this.monoWidthLowHz,
+    monoWidthHighHz: monoWidthHighHz ?? this.monoWidthHighHz,
+    limiterLookaheadSeconds: limiterLookaheadSeconds ?? this.limiterLookaheadSeconds,
+    limiterMakeupMaxDb: limiterMakeupMaxDb ?? this.limiterMakeupMaxDb,
+    trimAboveNoiseDb: trimAboveNoiseDb ?? this.trimAboveNoiseDb,
+    trimBelowLoudDb: trimBelowLoudDb ?? this.trimBelowLoudDb,
+    trimSilenceBelowLoudDb: trimSilenceBelowLoudDb ?? this.trimSilenceBelowLoudDb,
+    trimFadeSeconds: trimFadeSeconds ?? this.trimFadeSeconds,
   );
 }
 

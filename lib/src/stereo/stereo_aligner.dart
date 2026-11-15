@@ -10,16 +10,18 @@ import '../audio/pcm_audio.dart';
 /// aligner finds the lag from the first 20 seconds (cross-correlation within ±1 ms), shifts the
 /// later channel and gives both channels the same level. The stereo width stays.
 final class StereoAligner {
-  static const double _maxLagSeconds = 0.001;
+  /// Default largest delay between the channels that is looked for.
+  static const double defaultMaxLagSeconds = 0.001;
   static const int _windowSeconds = 20;
 
   /// Creates a new [StereoAligner].
   const StereoAligner();
 
-  /// [samples] aligned; anything but two channels is returned as it is.
-  Samples align(Samples samples, int sampleRate) {
+  /// [samples] aligned (a delay of up to [maxLagSeconds]); anything but two channels is returned
+  /// as it is.
+  Samples align(Samples samples, int sampleRate, {double maxLagSeconds = defaultMaxLagSeconds}) {
     if (samples.length != 2) return samples;
-    final int lag = lagOf(samples, sampleRate);
+    final int lag = lagOf(samples, sampleRate, maxLagSeconds: maxLagSeconds);
     Float64List left = samples[0];
     Float64List right = samples[1];
     if (lag > 0) left = _advance(left, lag);
@@ -35,11 +37,11 @@ final class StereoAligner {
   }
 
   /// Samples by which the left channel lags the right one (negative: the right one lags).
-  int lagOf(Samples samples, int sampleRate) {
+  int lagOf(Samples samples, int sampleRate, {double maxLagSeconds = defaultMaxLagSeconds}) {
     final Float64List left = samples[0];
     final Float64List right = samples[1];
     final int n = math.min(left.length, sampleRate * _windowSeconds);
-    final int reach = (_maxLagSeconds * sampleRate).toInt();
+    final int reach = (maxLagSeconds * sampleRate).toInt();
     double best = double.negativeInfinity;
     int lag = 0;
     for (int k = -reach; k <= reach; k++) {

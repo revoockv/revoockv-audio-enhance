@@ -1,8 +1,16 @@
-## 0.2.1
+## 0.3.0
 
+- **Every step can be fine tuned**: the values each step kept to itself are now `EnhanceSettings`
+  fields (and optional parameters of the step), with the old values as defaults, so the sound does
+  not change unless you ask: `alignMaxLagSeconds`, `toneNoBoostBelowHz`, `noiseTransitionDb`,
+  `deEssLowHz`, `deEssHighHz`, `deEssAboveVoiceDb`, `deEssAttackSeconds`, `deEssReleaseSeconds`,
+  `compressionKneeDb`, `expanderOpenSeconds`, `expanderCloseSeconds`, `monoWidthLowHz`,
+  `monoWidthHighHz`, `limiterLookaheadSeconds`, `limiterMakeupMaxDb`, `trimAboveNoiseDb`,
+  `trimBelowLoudDb`, `trimSilenceBelowLoudDb`, `trimFadeSeconds`.
 - `SilenceTrimmer` no longer cuts sung parts of a take that is loud all along (music from the
-  speaker under the voice): silence is now always at least 25 dB under the loudest blocks. Before,
-  the quietest tenth of such a take was taken for the noise floor, and up to half of it was cut.
+  speaker under the voice): silence is now always at least 25 dB under the loudest blocks
+  (`trimSilenceBelowLoudDb`). Before, the quietest tenth of such a take was taken for the noise
+  floor, and up to half of it was cut.
 
 ## 0.2.0
 
