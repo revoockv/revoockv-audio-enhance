@@ -28,7 +28,7 @@ lesson, an interview — and want it to sound better before you play, share or e
   is exactly the original, so a phone speaker loses nothing;
 - the peaks are evened out while the pauses stay quiet, so the room does not come up with the
   voice; softer "s" sounds;
-- the file ends up at a standard loudness (−14 LUFS by default, like streaming services) and
+- the file ends up at a standard loudness (−15 LUFS by default; −14 for streaming services) and
   never clips;
 - the silence before and after the voice can be cut away.
 
@@ -43,7 +43,7 @@ AI-style voice isolation (it removes steady noise, not music or other voices).
 
 ```yaml
 dependencies:
-  revoockv_audio_enhance: ^0.1.0
+  revoockv_audio_enhance: ^0.3.1
 ```
 
 ```dart
