@@ -1,3 +1,7 @@
+## 0.3.1
+
+- README: the install line names the current version, and the default loudness is −15 LUFS.
+
 ## 0.3.0
 
 - **Every step can be fine tuned**: the values each step kept to itself are now `EnhanceSettings`
