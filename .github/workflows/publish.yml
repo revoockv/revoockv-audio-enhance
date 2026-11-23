@@ -1,4 +1,5 @@
-# Publishes to pub.dev when a tag vX.Y.Z is pushed (tool/release.sh pushes it).
+# When a tag vX.Y.Z is pushed (tool/release.sh pushes it): tests, publishes to pub.dev, then creates
+# the GitHub release with the CHANGELOG section of that version as its notes.
 # pub.dev trusts this repository through OIDC: see "Automated publishing" on the package admin page.
 name: Publish to pub.dev
 
@@ -21,3 +22,19 @@ jobs:
     permissions:
       id-token: write
     uses: dart-lang/setup-dart/.github/workflows/publish.yml@v1
+  github-release:
+    needs: publish
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Create the GitHub release from the CHANGELOG section
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          version="${TAG#v}"
+          awk -v v="## $version" '$0 == v {on = 1; next} /^## / && on {exit} on' CHANGELOG.md > notes.md
+          printf '\n[pub.dev](https://pub.dev/packages/revoockv_audio_enhance/versions/%s)\n' "$version" >> notes.md
+          gh release create "$TAG" --title "$TAG" --notes-file notes.md --verify-tag
