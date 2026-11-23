@@ -1,3 +1,7 @@
+## Unreleased
+
+- Releases are published to pub.dev by GitHub Actions from a pushed `vX.Y.Z` tag (`tool/release.sh`).
+
 ## 0.3.1
 
 - README: the install line names the current version, and the default loudness is −15 LUFS.
