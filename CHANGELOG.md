@@ -1,6 +1,7 @@
 ## Unreleased
 
 - Releases are published to pub.dev by GitHub Actions from a pushed `vX.Y.Z` tag (`tool/release.sh`).
+- The same workflow then creates the GitHub release, with the CHANGELOG section of the version as its notes.
 
 ## 0.3.1
 
